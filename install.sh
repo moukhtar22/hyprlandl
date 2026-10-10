@@ -6001,6 +6001,18 @@ step_update() {
         echo "   Updating dotfiles, helper executables, and desktop configurations..."
     fi
 
+    # Ensure local persistent repository checkout at $HOME/hyprland exists
+    if [ ! -d "$HOME/hyprland/.git" ]; then
+        if [ -d "$DOTFILES_DIR/.git" ] && [ "$DOTFILES_DIR" != "$HOME/hyprland" ]; then
+            step_item "Setting up local repository checkout at $HOME/hyprland..."
+            mkdir -p "$HOME/hyprland"
+            cp -a "$DOTFILES_DIR/." "$HOME/hyprland/" 2>/dev/null || true
+        elif command -v git >/dev/null 2>&1; then
+            step_item "Cloning dotfiles repository into $HOME/hyprland..."
+            git clone --depth=1 https://github.com/rhythmcreative/hyprland.git "$HOME/hyprland" >> "$LOG_FILE" 2>&1 || true
+        fi
+    fi
+
     # Fetch and pull remote changes if working from a git repository
     if [ -d "$DOTFILES_DIR/.git" ]; then
         step_item "Checking for remote repository updates..."
@@ -6018,6 +6030,8 @@ step_update() {
             step_ok "Repository is already at the latest version."
         fi
     fi
+
+    export RHYTHM_DOTFILES_DIR="${RHYTHM_DOTFILES_DIR:-$HOME/hyprland}"
 
     if [ -x "$DOTFILES_DIR/.local/bin/system-ota" ]; then
         if [ "$AUTO_YES" = true ]; then

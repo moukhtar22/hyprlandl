@@ -24,8 +24,14 @@ if [ ! -d "$REPO_DIR/.git" ]; then
         REPO_DIR="$_self_repo"
     elif [ -d "$HOME/dotfiles/.git" ]; then
         REPO_DIR="$HOME/dotfiles"
+    elif command -v git >/dev/null 2>&1; then
+        echo "Cloning repository into $HOME/hyprland..."
+        if git clone --depth=1 https://github.com/rhythmcreative/hyprland.git "$HOME/hyprland" >> "$LOG_FILE" 2>&1; then
+            REPO_DIR="$HOME/hyprland"
+        fi
     fi
 fi
+export RHYTHM_DOTFILES_DIR="$REPO_DIR"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 STATUS_FILE="${XDG_RUNTIME_DIR:-/tmp}/ota-status.json"
 BACKUP_BASE="$HOME/.config.backup"
