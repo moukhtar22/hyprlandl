@@ -115,7 +115,16 @@ WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
 # Pantalla activa: las barras se ocultan solo en la pantalla enfocada, igual que
 # hacen los menus de red, para que el resto de pantallas no se queden a medias.
 get_active_monitor() {
-    local mon
+    local mon cx cy
+    # Primero el monitor bajo el cursor (como SUPER+A): rofi se abre ahi, y si se
+    # ocultaban las barras del monitor "enfocado" podian ser las del otro.
+    cx=$(hyprctl cursorpos 2>/dev/null | cut -d',' -f1 | tr -d ' ')
+    cy=$(hyprctl cursorpos 2>/dev/null | cut -d',' -f2 | tr -d ' ')
+    if [ -n "$cx" ] && [ -n "$cy" ]; then
+        mon=$(hyprctl monitors -j 2>/dev/null | jq -r --argjson cx "$cx" --argjson cy "$cy" \
+            '.[] | select($cx >= .x and $cx < (.x + .width) and $cy >= .y and $cy < (.y + .height)) | .name' 2>/dev/null | head -n1)
+        [ -n "$mon" ] && [ "$mon" != "null" ] && echo "$mon" && return
+    fi
     mon=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused == true) | .name' 2>/dev/null | head -n1)
     [ -n "$mon" ] && [ "$mon" != "null" ] && echo "$mon" && return
     echo ""
@@ -140,6 +149,11 @@ cleanup() {
     rm -f "$TEMP_LIST" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+
+# Se ocultan las barras YA, no justo antes de rofi: antes de abrirlo se
+# comprueban las 500+ miniaturas y eso tardaba segundos con la isla a la vista,
+# que luego desaparecia de golpe (y volvia al terminar).
+hide_all_bars
 
 # Verificar si el directorio existe o sembrar default si está vacío
 mkdir -p "$WALLPAPER_DIR" "$PREVIEW_DIR"
@@ -208,8 +222,8 @@ for img in "${images[@]}"; do
 done
 
 # 4. Mostrar rofi (Carga instantánea)
-hide_all_bars
 selected=$(rofi-themed -dmenu -i \
+    ${ISLAND_TARGET:+$([ "$ISLAND_TARGET" != all ] && printf '%s' "-m $ISLAND_TARGET")} \
     -p "Wallpapers" \
     -theme "$ROFI_THEME" \
     -show-icons \

@@ -611,7 +611,6 @@ ShellRoot {
         target: "theme"
         function reload(): string {
             walFile.reload()
-            root._walReloadCounter++
             return "reloaded"
         }
     }
@@ -623,13 +622,8 @@ ShellRoot {
         id: walFile
         path: Quickshell.env("HOME") + "/.cache/wal/colors.json"
         watchChanges: true
-        onFileChanged: {
-            walFile.reload()
-            root._walReloadCounter++
-        }
-        onTextChanged: {
-            root._walReloadCounter++
-        }
+        onFileChanged: walFile.reload()
+        onLoaded: root._walReloadCounter++
     }
 
     readonly property var walData: {

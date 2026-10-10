@@ -85,19 +85,13 @@ fi
                 elif command -v ffmpeg >/dev/null 2>&1; then
                     ffmpeg -y -i "$WALLPAPER_PATH" -vframes 1 "/tmp/wallpaper-frame.png" >/dev/null 2>&1 && PYWAL_SRC="/tmp/wallpaper-frame.png"
                 fi
+                rm -f "$HOME/.cache/wal/schemes/_tmp_wallpaper-frame_png"* 2>/dev/null || true
                 ;;
             *)
-                # Muestreo optimizado de 512px para extraer la paleta en < 0.1s sin procesar gigabytes en RAM
-                SAMPLE_SRC="/tmp/wallpaper-pywal-sample.jpg"
-                if command -v ffmpegthumbnailer >/dev/null 2>&1; then
-                    ffmpegthumbnailer -i "$WALLPAPER_PATH" -o "$SAMPLE_SRC" -s 512 -q 8 2>/dev/null && PYWAL_SRC="$SAMPLE_SRC"
-                elif command -v magick >/dev/null 2>&1; then
-                    magick "$WALLPAPER_PATH" -resize 512x512^ "$SAMPLE_SRC" 2>/dev/null && PYWAL_SRC="$SAMPLE_SRC"
-                elif command -v convert >/dev/null 2>&1; then
-                    convert "$WALLPAPER_PATH" -resize 512x512^ "$SAMPLE_SRC" 2>/dev/null && PYWAL_SRC="$SAMPLE_SRC"
-                fi
+                PYWAL_SRC="$WALLPAPER_PATH"
                 ;;
         esac
+        rm -f "$HOME/.cache/wal/schemes/_tmp_wallpaper-pywal-sample"* 2>/dev/null || true
         echo "$WALLPAPER_PATH" > "$HOME/.cache/wallpaper-pywal-src"
         timeout 10 wal -i "$PYWAL_SRC" -n -q || timeout 10 wal --backend colorthief -i "$PYWAL_SRC" -n -q || true
     fi
@@ -111,8 +105,8 @@ PYWAL_PID=$!
 
 # 4. TRANSICION DEL WALLPAPER + PALETA: margen breve para transicion visual
 sleep 0.35
-# Margen breve para que pywal y sincronizaciones ligeras concluyan sin congelar la UI
-for ((i = 0; i < 6; i++)); do
+# Margen para que pywal y sincronizaciones concluyan sin congelar la UI
+for ((i = 0; i < 25; i++)); do
     kill -0 "$PYWAL_PID" 2>/dev/null || break
     sleep 0.1
 done
