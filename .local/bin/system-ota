@@ -690,7 +690,8 @@ cmd_update() {
             stash_needed=true
         fi
 
-        # Pull if behind
+        # Fetch and pull if behind
+        git -C "$REPO_DIR" fetch origin main >/dev/null 2>&1 || true
         local behind
         behind=$(git -C "$REPO_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then

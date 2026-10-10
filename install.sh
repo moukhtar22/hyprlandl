@@ -1710,7 +1710,7 @@ Usage:
   ./install.sh [OPTIONS]
 
 Options:
-  -u, --update               Update existing installation (sync configs, helpers, & packages)
+  -u, --update, --sync       Update existing installation (pull latest changes, sync configs & helpers)
   -y, --yes                  Assume yes to all prompts (unattended mode)
   --preview, --dry-run       Simulate installation workflow without system changes
   --no-reboot                Do not prompt or execute reboot upon completion
@@ -1736,6 +1736,7 @@ One-line installation:
 
 Examples:
   ./install.sh --update
+  ./install.sh --sync
   ./install.sh --resume
   ./install.sh --preview
   ./install.sh -y --no-reboot --skip-wallpapers
@@ -1746,7 +1747,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -u|--update|update)
+        -u|--update|update|--sync|sync)
             UPDATE_MODE=true
             shift
             ;;
@@ -5992,8 +5993,31 @@ EOF
 step_update() {
     clear_logo
     echo ""
-    gum style --foreground 6 --bold --padding "0 0 1 $PADDING_LEFT" "Rhythm Hyprland System Updater"
-    gum style --foreground 7 --padding "0 0 1 $PADDING_LEFT" "Updating dotfiles, helper executables, and desktop configurations..."
+    if command -v gum >/dev/null 2>&1; then
+        gum style --foreground 6 --bold --padding "0 0 1 $PADDING_LEFT" "Rhythm Hyprland System Updater"
+        gum style --foreground 7 --padding "0 0 1 $PADDING_LEFT" "Updating dotfiles, helper executables, and desktop configurations..."
+    else
+        echo ":: Rhythm Hyprland System Updater"
+        echo "   Updating dotfiles, helper executables, and desktop configurations..."
+    fi
+
+    # Fetch and pull remote changes if working from a git repository
+    if [ -d "$DOTFILES_DIR/.git" ]; then
+        step_item "Checking for remote repository updates..."
+        git -C "$DOTFILES_DIR" fetch origin main >> "$LOG_FILE" 2>&1 || true
+        local behind
+        behind=$(git -C "$DOTFILES_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+        if [ "$behind" -gt 0 ]; then
+            step_item "Pulling $behind new commit(s)..."
+            if git -C "$DOTFILES_DIR" pull --rebase origin main >> "$LOG_FILE" 2>&1; then
+                step_ok "Repository updated to latest version."
+            else
+                step_warn "Git pull had conflicts; continuing with local files."
+            fi
+        else
+            step_ok "Repository is already at the latest version."
+        fi
+    fi
 
     if [ -x "$DOTFILES_DIR/.local/bin/system-ota" ]; then
         if [ "$AUTO_YES" = true ]; then
@@ -6006,7 +6030,16 @@ step_update() {
             [ "$DISTRO" = "ubuntu" ] && pkg_label="apt"
             [ "$DISTRO" = "alpine" ] && pkg_label="apk"
             [ "$DISTRO" = "opensuse" ] && pkg_label="zypper"
-            if gum confirm "Would you also like to update system packages with $pkg_label?"; then
+            local do_pkg_update=false
+            if command -v gum >/dev/null 2>&1; then
+                if gum confirm "Would you also like to update system packages with $pkg_label?"; then
+                    do_pkg_update=true
+                fi
+            else
+                read -r -p "Would you also like to update system packages with $pkg_label? [y/N] " _reply
+                [[ "$_reply" =~ ^[Yy] ]] && do_pkg_update=true
+            fi
+            if [ "$do_pkg_update" = true ]; then
                 bash "$DOTFILES_DIR/.local/bin/system-ota" update --system
             else
                 bash "$DOTFILES_DIR/.local/bin/system-ota" update
@@ -6017,18 +6050,6 @@ step_update() {
     fi
 
     # Pywal, antes de modern-pywal-sync.
-    #
-    # ESTE PASO NO EXISTIA, y era la causa de que waybar y rofi salieran sin
-    # tema. modern-pywal-sync se negaba a trabajar sin ~/.cache/wal/colors.sh,
-    # ese cache solo lo crea `wal`, y `wal` no se ejecutaba en el camino de
-    # update en absoluto: solo dentro del bloque de SDDM en la instalacion
-    # completa. De modo que tras cualquier update en una maquina sin pywal
-    # previo, los ficheros colors-pywal.css y colors-pywal.rasi no se creaban,
-    # sus @import fallaban, y GTK y rofi descartan el tema ENTERO cuando un
-    # import no se resuelve.
-    #
-    # Se hace aqui, y antes del sincronizador, para que sincronice una paleta de
-    # verdad y no la de reserva.
     step_item "Calibrating the pywal palette from the current wallpaper..."
     local WAL_SRC=""
     if [ -f "$HOME/.cache/current-wallpaper" ]; then
@@ -6053,12 +6074,6 @@ step_update() {
     fi
 
     # Reload systemd and re-enable all services after update
-    #
-    # Esto era una SEGUNDA lista de unidades, igual que la de mas arriba. Unificar
-    # solo una de las dos deja el mismo problema: un servicio nuevo se habilita en
-    # un sitio y no en el otro, y no se ve hasta que algo no arranca. Las dos
-    # llaman a enable-user-services, que decide mirando el WantedBy de cada
-    # unidad.
     step_item "Reloading systemd user services..."
     systemctl --user daemon-reload >> "$LOG_FILE" 2>&1 || true
     if [ -x "$HOME/.local/bin/enable-user-services" ]; then
@@ -6088,12 +6103,22 @@ step_update() {
         "$HOME/.local/bin/rust-dock-launcher" >/dev/null 2>&1 &
     fi
 
+    # Reload Hyprland configuration if compositor is running
+    if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        hyprctl reload >> "$LOG_FILE" 2>&1 || true
+    fi
+
     step_ok "Services reloaded."
 
     clear_logo
     echo ""
-    gum style --foreground 2 --bold --padding "0 0 1 $PADDING_LEFT" "Update completed successfully"
-    gum style --foreground 7 --padding "0 0 1 $PADDING_LEFT" "All configurations, helpers, and services have been updated."
+    if command -v gum >/dev/null 2>&1; then
+        gum style --foreground 2 --bold --padding "0 0 1 $PADDING_LEFT" "Update completed successfully"
+        gum style --foreground 7 --padding "0 0 1 $PADDING_LEFT" "All configurations, helpers, and services have been updated."
+    else
+        echo ":: Update completed successfully"
+        echo "   All configurations, helpers, and services have been updated."
+    fi
     exit 0
 }
 
