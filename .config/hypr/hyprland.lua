@@ -453,7 +453,7 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 -- argumentos en hl.dispatch(...) y eso no es Lua valido, asi que falla con
 -- "')' expected near". El equivalente verificado es hyprctl eval con el
 -- dispatcher de la API de lua.
-hl.bind("ALT + Return", hl.dsp.exec_cmd("hyprctl eval 'hl.dsp.window.fullscreen(0)'"))
+hl.bind("ALT + Return", hl.dsp.exec_cmd("hyprctl eval 'hl.dispatch(hl.dsp.window.fullscreen(0))'"))
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle_performance.sh"))
 hl.bind(mainMod .. " + BackSpace", hl.dsp.exec_cmd("~/.local/bin/powermenu-with-monitor-detection"))
