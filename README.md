@@ -4,6 +4,10 @@
   <p><i>Personal setup, customized for everyday use. </i></p>
 </div>
 
+> [!WARNING]
+> **This is the development (`dev`) repository.** Things here can be broken until they are released to stable.
+> If you want a working setup, use the stable repository instead: **[rhythmcreative/hyprland](https://github.com/rhythmcreative/hyprland)**.
+
 <div align="center">
 
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793d1?style=for-the-badge&logo=archlinux&logoColor=white "Arch Linux")](https://archlinux.org/)
