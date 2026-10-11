@@ -25,6 +25,7 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "waybar"
     color: "transparent"
+    property bool showTrayApps: false
 
     // Live pywal colors directly from ~/.cache/wal/colors.json
     FileView {
@@ -757,9 +758,9 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         }
                     }
 
-                    // 2.3 Other System Tray Apps (Chromium, Discord, Steam, etc.)
+                    // 2.3 Other System Tray Apps (Disabled by default so background apps like Telegram don't clutter the bar)
                     Repeater {
-                        model: SystemTray.items.values
+                        model: barWin.showTrayApps ? SystemTray.items.values : []
 
                         delegate: Rectangle {
                             required property var modelData
@@ -770,7 +771,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                                 const ic = modelData.icon.toLowerCase()
                                 return ic.indexOf("symbolic") !== -1 || ic.indexOf("-panel") !== -1 || ic.indexOf("status") !== -1 || ic.indexOf("telegram") !== -1
                             }
-                            visible: !isNetworkApplet
+                            visible: barWin.showTrayApps && !isNetworkApplet
                             implicitWidth: visible ? 26 : 0
                             implicitHeight: 30
                             radius: 6
