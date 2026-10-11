@@ -58,6 +58,20 @@ ShellRoot {
         return panel
     }
 
+    function toggleBluetooth(screenName) {
+        let panel = root.panelForScreen(screenName)
+        if (panel && panel.expanded && panel.currentTab === 0 && panel.controlSubView === 2) {
+            root.setPanelState(screenName, false)
+            return "collapsed"
+        }
+        let p = root.setPanelState(screenName, true, 0, 2)
+        if (!p) return "unavailable"
+        root.btScanning = true
+        btStatusProc.running = true
+        root.refreshAllStates()
+        return "bluetooth"
+    }
+
     function anyPanelExpanded() {
         return Object.keys(root.islandPanels).some(name => root.islandPanels[name].expanded)
     }
@@ -509,6 +523,9 @@ ShellRoot {
             root.btScanning = true
             btStatusProc.running = true
             return "bluetooth"
+        }
+        function toggleBluetooth(screenName: string): string {
+            return root.toggleBluetooth(screenName)
         }
         function openAudio(screenName: string): string {
             let panel = root.setPanelState(screenName, true, 0, 3)
@@ -1324,6 +1341,7 @@ ShellRoot {
         BarraWaybar {
             required property var modelData
             screen: modelData
+            islandRoot: root
         }
     }
 
