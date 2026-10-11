@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Services.SystemTray
+import Qt5Compat.GraphicalEffects
 
 PanelWindow {
     id: barWin
@@ -764,6 +765,11 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             required property var modelData
                             // Skip nm-applet since WiFi is already rendered above
                             readonly property bool isNetworkApplet: (modelData && ((modelData.id && modelData.id.indexOf("nm-applet") !== -1) || (modelData.title && modelData.title.indexOf("Network") !== -1)))
+                            readonly property bool isSymbolic: {
+                                if (!modelData || !modelData.icon) return false
+                                const ic = modelData.icon.toLowerCase()
+                                return ic.indexOf("symbolic") !== -1 || ic.indexOf("-panel") !== -1 || ic.indexOf("status") !== -1 || ic.indexOf("telegram") !== -1
+                            }
                             visible: !isNetworkApplet
                             implicitWidth: visible ? 26 : 0
                             implicitHeight: 30
@@ -772,11 +778,22 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             Behavior on color { ColorAnimation { duration: 180 } }
 
                             Image {
+                                id: trayAppImg
                                 anchors.centerIn: parent
                                 width: 16
                                 height: 16
+                                sourceSize.width: 16
+                                sourceSize.height: 16
                                 source: (modelData && modelData.icon) ? modelData.icon : ""
                                 fillMode: Image.PreserveAspectFit
+                                visible: !isSymbolic
+                            }
+
+                            ColorOverlay {
+                                anchors.fill: trayAppImg
+                                source: trayAppImg
+                                color: barWin.colFg
+                                visible: isSymbolic
                             }
 
                             MouseArea {
