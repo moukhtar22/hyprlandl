@@ -1314,6 +1314,19 @@ ShellRoot {
         }
     }
 
+    // Barra nativa de Quickshell equivalente a Waybar (workspaces, sys-info, cava, language, status)
+    property bool enableQuickshellWaybar: true
+
+    Variants {
+        id: waybarVariants
+        model: Quickshell.screens
+
+        BarraWaybar {
+            required property var modelData
+            screen: modelData
+        }
+    }
+
     // Main Dynamic Island Windows (Multi-monitor support via Variants)
     Variants {
         id: islandVariants

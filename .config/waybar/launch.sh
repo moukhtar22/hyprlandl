@@ -68,6 +68,14 @@ mkdir -p "$(dirname "$LOG_FILE")"
 
 echo "--- Launching Waybar at $(date) ---" >> "$LOG_FILE"
 
+# Skip Waybar launch if Quickshell is actively providing the BarraWaybar top bar
+if [ "$FORCE" = "0" ] && [ -f "$HOME/.config/quickshell/waybar-island/BarraWaybar.qml" ] && pgrep -f "quickshell.*waybar-island" >/dev/null 2>&1; then
+    echo "Quickshell BarraWaybar is active; skipping Waybar launch." >> "$LOG_FILE"
+    release_waybar_lock
+    trap - EXIT
+    exit 0
+fi
+
 # 0. ¿Hay algo que rehacer?
 #
 # Se resuelve el entorno y la lista de monitores ANTES de matar nada, porque
