@@ -555,8 +555,11 @@ if [ -x "$HOME/.local/bin/sync-qt-pywal" ]; then
     "$HOME/.local/bin/sync-qt-pywal" >/dev/null 2>&1 &
 fi
 
-# 6. Sincronizar Waybar — reinicio completo para sincronizar todos los colores
-echo "  • Waybar..."
+# 6. Sincronizar barra superior (Quickshell) y asegurar que Waybar no esté corriendo
+echo "  • Quickshell top bar & Dynamic Island..."
+pkill -x waybar 2>/dev/null || true
+pkill -x .waybar-wrapped 2>/dev/null || true
+
 if [ -f "$HOME/.cache/wal/colors-waybar.css" ]; then
     ln -sf "$HOME/.cache/wal/colors-waybar.css" "$HOME/.config/waybar/colors-pywal.css"
 elif [ -f "$HOME/.config/waybar/colors-pywal.css" ]; then
@@ -569,15 +572,6 @@ if [ "$INSTALL_MODE" -ne 1 ] && [ "$STARTUP" -ne 1 ] && command -v hyprctl >/dev
     COMPOSITOR_RUNNING=1
 fi
 
-# Una sola recarga, y solo si la paleta cambio de verdad.
-#
-# Antes cada ejecucion mataba y relanzaba Waybar y rust-dock aunque la paleta
-# fuera la misma (mismo wallpaper elegido otra vez, sync manual, arranque), y lo
-# hacia uno detras de otro: Waybar (varios segundos) y despues el dock. Ahora
-# se compara el hash de colors.json con el de la ultima vez; si no cambio, las
-# barras no se tocan. Y si cambio, Waybar y el dock se relanzan A LA VEZ y se
-# espera a que terminen, para que quien llama (wallpaper-bars show) revele todo
-# ya sincronizado.
 PALETTE_HASH_FILE="$HOME/.cache/modern-pywal-sync.palette"
 PALETTE_NOW=$(md5sum "$HOME/.cache/wal/colors.json" 2>/dev/null | cut -d' ' -f1)
 PALETTE_CHANGED=1
@@ -586,24 +580,8 @@ if [ -n "$PALETTE_NOW" ] && [ "$(cat "$PALETTE_HASH_FILE" 2>/dev/null)" = "$PALE
 fi
 [ -n "$PALETTE_NOW" ] && printf '%s\n' "$PALETTE_NOW" > "$PALETTE_HASH_FILE"
 
-WAYBAR_SYNC_PID=""
-if [ "$STARTUP" -eq 1 ]; then
-    # En arranque de sesión, Waybar ya arranca desde el autostart de Hyprland.
-    # Se invoca launch.sh sin --force para asegurar idempotencia sin matar nada.
-    "$HOME/.config/waybar/launch.sh" >/dev/null 2>&1 &
-elif [ "$COMPOSITOR_RUNNING" -eq 1 ] && [ "$PALETTE_CHANGED" -eq 1 ]; then
-    # launch.sh --force mata y relanza Waybar con su lock tomado (un pkill previo
-    # dejaba una ventana en la que el vigilante lanzaba un segundo launch.sh).
-    (
-        "$HOME/.config/waybar/launch.sh" --force >/dev/null 2>&1
-        pkill -x nm-applet 2>/dev/null || true
-        nm-applet --indicator >/dev/null 2>&1 &
-    ) &
-    WAYBAR_SYNC_PID=$!
-fi
-
 if [ "$COMPOSITOR_RUNNING" -eq 1 ] || [ "$STARTUP" -eq 1 ]; then
-    # 6b. rust-dock: relanzar para que recoja la paleta nueva (en paralelo con Waybar)
+    # 6b. rust-dock: relanzar para que recoja la paleta nueva
     if [ "$STARTUP" -eq 1 ] || [ "$PALETTE_CHANGED" -eq 1 ]; then
         echo "  • rust-dock..."
         setsid bash -c '
@@ -619,18 +597,12 @@ if [ "$COMPOSITOR_RUNNING" -eq 1 ] || [ "$STARTUP" -eq 1 ]; then
         ' >/dev/null 2>&1 </dev/null &
     fi
 
-    # 6c. Auto-hide disabled: waybar stays always visible (SIGUSR2 = show)
-    pkill -x waybar_auto_hi 2>/dev/null || true
-
-    # 6d. Recargar colores de Pywal en Dynamic Island si esta corriendo
-    echo "  • Dynamic Island (Quickshell)..."
+    # 6c. Recargar colores de Pywal en Quickshell (BarraWaybar + Dynamic Island)
+    echo "  • Quickshell Island & Bar..."
     if "$HOME/.local/bin/island-running" >/dev/null 2>&1; then
         timeout 2 quickshell ipc -p "$HOME/.config/quickshell/waybar-island/shell.qml" --any-display call theme reload >/dev/null 2>&1 || true
     fi
 fi
-
-# Esperar a Waybar para que todo quede sincronizado antes de seguir.
-[ -n "$WAYBAR_SYNC_PID" ] && wait "$WAYBAR_SYNC_PID" 2>/dev/null
 
 # 7. Sincronizar Rofi
 echo "  • Rofi..."

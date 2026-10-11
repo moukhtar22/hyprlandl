@@ -813,7 +813,7 @@ EOF
                 --height 9 \
                 --header="Select software installation mode:" \
                 --cursor-prefix="> " \
-                "Fast Core Desktop (Instant setup: Hyprland, Waybar, Island, Kitty, Thunar)" \
+                "Fast Core Desktop (Instant setup: Hyprland, Quickshell Island Bar, Kitty, Thunar)" \
                 "Custom Categorized Menus (Pick browsers, chat, dev, media apps)" \
                 "Full Heavy Stack (Brave, Steam, VSCode, Discord, LibreOffice, GIMP...)" \
                 "Search & Select ANY Packages with fzf (Nixpkgs database)" </dev/tty 2>/dev/null || true)
@@ -2969,7 +2969,6 @@ step_software() {
             hyprpicker
             xdg-desktop-portal-hyprland
             xdg-desktop-portal-gtk
-            waybar
             quickshell
             rofi-wayland
             kitty
@@ -3116,7 +3115,6 @@ step_software() {
             hyprpicker
             xdg-desktop-portal-hyprland
             xdg-desktop-portal-gtk
-            waybar
             rofi
             kitty
             zsh
@@ -3346,7 +3344,6 @@ step_software() {
             bash
             gawk
             grep
-            waybar
             rofi-wayland
             kitty
             zsh
@@ -3534,7 +3531,6 @@ step_software() {
             xwayland
 
             # Bars, Launchers & Shell
-            waybar
             rofi
             kitty
             zsh
@@ -3682,7 +3678,6 @@ step_software() {
         xdg-desktop-portal-gtk
 
         # Bars, Dynamic Island & Launchers
-        waybar
         quickshell
         rofi
 
@@ -3815,6 +3810,8 @@ step_software() {
     rhythm_install_with_progress "${#CORE_PKGS[@]}" "Installing core packages and dependencies via yay..." \
         yay -S --needed --noconfirm "${CORE_PKGS[@]}"
     step_ok "Core packages installed."
+
+    install_quickshell || true
 
     # Install and verify NWG tools
     install_nwg_tools || true
@@ -5132,13 +5129,6 @@ MONCONF
     if [ -x "$HOME/.local/bin/rhythm-migrate" ]; then
         step_item "Running dotfiles migrations..."
         RHYTHM_REPO="$DOTFILES_DIR" "$HOME/.local/bin/rhythm-migrate" >> "$LOG_FILE" 2>&1 || step_warn "Some migrations reported issues."
-    fi
-
-    # Configure Waybar battery modules for target machine (0, 1, or 2+ batteries)
-    if [ -f "$HOME/.config/waybar/scripts/auto-battery-setup.sh" ]; then
-        chmod +x "$HOME/.config/waybar/scripts/auto-battery-setup.sh" 2>/dev/null || true
-        step_item "Configuring Waybar battery detection..."
-        "$HOME/.config/waybar/scripts/auto-battery-setup.sh" >> "$LOG_FILE" 2>&1 || true
     fi
 
     # GTK 3 & GTK 4 defaults

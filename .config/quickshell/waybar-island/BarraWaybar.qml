@@ -18,8 +18,15 @@ PanelWindow {
         right: true
     }
 
-    implicitHeight: 40
-    visible: (typeof root !== "undefined" && root.enableQuickshellWaybar !== undefined) ? root.enableQuickshellWaybar : true
+    readonly property bool isScreenHidden: (typeof root !== "undefined" && barWin.screen && root.hiddenScreens && root.hiddenScreens[barWin.screen.name] === true)
+    visible: {
+        if (typeof root !== "undefined") {
+            if (root.enableQuickshellWaybar === false) return false
+            if (root.islandVisible === false) return false
+            if (isScreenHidden) return false
+        }
+        return true
+    }
     exclusionMode: visible ? ExclusionMode.Normal : ExclusionMode.Ignore
     exclusiveZone: visible ? 40 : 0
     WlrLayershell.layer: WlrLayer.Top

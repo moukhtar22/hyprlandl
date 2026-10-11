@@ -43,7 +43,6 @@
         hyprsunset
         hyprpicker
         # Bar, menu, notifications and the dynamic island.
-        waybar
         quickshell
         rofi
         libnotify

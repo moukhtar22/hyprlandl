@@ -60,12 +60,6 @@ let
     # neither Waybar nor the dock was reconciled on hotplug. The island
     # sensors shell out to `python3 -c` inline for the same reason.
     python3
-    # waybar: rust-dock-monitor-watcher's reconcile_waybar runs launch.sh,
-    # which execs `waybar`. Without it here the reconcile fired every 90s,
-    # the launcher logged "waybar: command not found" and the bar was never
-    # restarted after dying. This was the whole reason the bar "came and
-    # went".
-    waybar
     # pactl: volume-dynamic (bound to the volume keys) calls it. The session
     # runs PipeWire, which does not ship a `pactl`, so the F11/F12 and mute
     # keys did nothing at all until pulseaudio is on PATH.
@@ -104,7 +98,6 @@ let
     # que es justo lo que el QML pide 31 veces.
     bash
     quickshell
-    waybar
     wireplumber
     brightnessctl
     networkmanager
