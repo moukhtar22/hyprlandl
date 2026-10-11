@@ -20,6 +20,7 @@ PanelWindow {
     implicitHeight: 40
     visible: (typeof root !== "undefined" && root.enableQuickshellWaybar !== undefined) ? root.enableQuickshellWaybar : true
     exclusionMode: visible ? ExclusionMode.Normal : ExclusionMode.Ignore
+    exclusiveZone: visible ? 40 : 0
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "waybar"
     color: "transparent"
@@ -327,6 +328,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             implicitHeight: 26
                             radius: 5
                             color: isFocused ? Qt.rgba(barWin.colAccent.r, barWin.colAccent.g, barWin.colAccent.b, 0.25) : (wsMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.2) : "transparent")
+                            Behavior on color { ColorAnimation { duration: 180 } }
                             border.color: isFocused ? Qt.rgba(barWin.colAccent.r, barWin.colAccent.g, barWin.colAccent.b, 0.45) : "transparent"
                             border.width: 1
 
