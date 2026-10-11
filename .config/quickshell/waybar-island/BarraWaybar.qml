@@ -76,7 +76,7 @@ PanelWindow {
 
     // System stats
     property int cpuPercent: 5
-    property string cpuBar: "____"
+    property string cpuBar: "▁▁▁▁"
     property string memStr: "7.6G/14.9G"
     property string cpuTempStr: "󰔏 66°C"
     property string gpuTempStr: "󰔏 51°C"
@@ -186,35 +186,56 @@ PanelWindow {
             # 1. Multi-core CPU calculation matching Waybar {icon0}{icon1}{icon2}{icon3} {usage}%
             cpu_info=$(python3 -c '
 import time
-def read_cores():
-    cores = {}
+
+def read_cpu():
+    cores = []
+    tot_idle = 0
+    tot_all = 0
     with open(\"/proc/stat\") as f:
         for line in f:
-            if line.startswith(\"cpu\") and line[3:4].isdigit():
-                parts = line.split()
-                name = parts[0]
-                idle = int(parts[4]) + int(parts[5])
-                total = sum(int(p) for p in parts[1:])
-                cores[name] = (idle, total)
-                if len(cores) >= 4:
-                    break
-    return cores
-c1 = read_cores()
+            if line.startswith(\"cpu\"):
+                p = line.split()
+                if p[0] == \"cpu\":
+                    tot_idle = int(p[4]) + int(p[5])
+                    tot_all = sum(int(x) for x in p[1:])
+                elif p[0][3:].isdigit():
+                    idle = int(p[4]) + int(p[5])
+                    tot = sum(int(x) for x in p[1:])
+                    cores.append((idle, tot))
+    return cores, tot_idle, tot_all
+
+c1, ti1, ta1 = read_cpu()
 time.sleep(0.12)
-c2 = read_cores()
-icons = [\" \", \"▂\", \"▃\", \"▄\", \"▅\", \"▆\", \"▇\", \"█\"]
+c2, ti2, ta2 = read_cpu()
+
+dtot_all = ta2 - ta1
+didle_all = ti2 - ti1
+overall_pct = max(0, min(100, int(((dtot_all - didle_all) / max(dtot_all, 1)) * 100)))
+
+icons = [\"▁\", \"▂\", \"▃\", \"▄\", \"▅\", \"▆\", \"▇\", \"█\"]
 bars = \"\"
-total_pct = 0
-for i in range(4):
-    name = f\"cpu{i}\"
-    didle = c2[name][0] - c1[name][0]
-    dtot = c2[name][1] - c1[name][1]
-    pct = (dtot - didle) / max(dtot, 1)
-    total_pct += pct
-    idx = min(int(pct * len(icons)), len(icons) - 1)
-    bars += icons[idx]
-print(f\"{bars}|{int(total_pct / 4 * 100)}\")
-' 2>/dev/null || echo \" ▂▃ |10\")
+N = len(c1)
+if N >= 4:
+    for k in range(4):
+        s = k * N // 4
+        e = (k + 1) * N // 4
+        u = sum((c2[i][1] - c2[i][0]) - (c1[i][1] - c1[i][0]) for i in range(s, e))
+        t = sum(c2[i][1] - c1[i][1] for i in range(s, e))
+        pct = max(0.0, min(1.0, u / max(t, 1)))
+        bars += icons[min(int(pct * 8), 7)]
+elif N > 0:
+    for k in range(4):
+        i = min(k * N // 4, N - 1)
+        u = (c2[i][1] - c2[i][0]) - (c1[i][1] - c1[i][0])
+        t = c2[i][1] - c1[i][1]
+        pct = max(0.0, min(1.0, u / max(t, 1)))
+        bars += icons[min(int(pct * 8), 7)]
+else:
+    idx = min(int((overall_pct / 100.0) * 8), 7)
+    bars = icons[idx] * 4
+
+print(f\"{bars}|{overall_pct}\")
+' 2>/dev/null || echo \"▁▁▁▁|10\")
 
             # 2. RAM
             ram_used=$(free -m | awk '/Mem:/ {printf \"%.1fG/%.1fG\", $3/1024, $2/1024}')
@@ -296,7 +317,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                 try {
                     const p = text.trim().split("|")
                     if (p.length >= 20) {
-                        barWin.cpuBar = p[0] || "____"
+                        barWin.cpuBar = p[0] || "▁▁▁▁"
                         barWin.cpuPercent = parseInt(p[1]) || 5
                         barWin.memStr = p[2] || "7.6G/14.9G"
                         barWin.cpuTempStr = p[3] || "󰔏 58°C"
