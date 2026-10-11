@@ -18,6 +18,9 @@ PanelWindow {
         right: true
     }
 
+    implicitHeight: 40
+    height: 40
+
     readonly property bool isScreenHidden: (typeof root !== "undefined" && barWin.screen && root.hiddenScreens && root.hiddenScreens[barWin.screen.name] === true)
     visible: {
         if (typeof root !== "undefined") {
