@@ -143,80 +143,18 @@ reconcile_docks() {
 # last)): bash expande el valor como expresion aritmetica, y ahi una
 # sustitucion de comando se ejecuta. Es decir, escribir en un fichero de /tmp
 # significa ejecutar como este usuario.
-COOLDOWN_FILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/.rust-dock-reconcile-cooldown"
 reconcile_waybar() {
-    [ -x "$HOME/.config/waybar/launch.sh" ] || return 0
-    command -v hyprctl >/dev/null 2>&1 || return 0
-
-    local monitors
-    monitors=$(hyprctl monitors -j 2>/dev/null | jq -r '.[].name' 2>/dev/null || true)
-    [ -z "$monitors" ] && return 0
-
-    local m missing=0
-    while IFS= read -r m; do
-        [ -z "$m" ] && continue
-        # launch.sh lanza `waybar -c <dir>/config-<monitor> -s <estilo>`, asi que
-        # el output se lee del propio cmdline. El ancla evita que config-DP-1
-        # case con config-DP-11.
-        #
-        # El nombre del proceso no sirve: en Nix el binario es
-        # .waybar-wrapped, no "waybar", asi que cualquier criterio por nombre
-        # (pgrep -x, o este mismo -f con "waybar " al principio) daba falso
-        # negativo. Con el criterio roto la barra parecia ausente siempre, y
-        # reconcile la relanzaba cada 90 s: aparecia y desaparecia sola. Se
-        # busca el ejecutable real, .waybar-wrapped, o el nombre en cualquier
-        # posicion de la linea de comandos.
-        pgrep -f "[w]aybar.*-c .*config-$m(\$| )" >/dev/null 2>&1 \
-            || pgrep -f "[w]aybar-wrapped.*-c .*config-$m(\$| )" >/dev/null 2>&1 \
-            || { missing=1; break; }
-    done <<< "$monitors"
-
-    # Retirar las barras de monitores que ya no estan.
-    #
-    # Faltaba la otra mitad: al desenchufar un monitor, su barra se quedaba
-    # corriendo. reconcile_docks cierra los docks sobrantes y las barras se
-    # quedaban ahi, invisibles pero vivas, arrastrando su modulo de Cava con
-    # ellas. Nadie lo notaba porque no se ven, pero es un proceso menos por
-    # cada monitor que se ha enchufado alguna vez.
-    #
-    # Se comparan los monitors que Hyprland reporta con los que atienden las
-    # barras vivas, y se termina lo que no encaje. Con dock-procs, que compara
-    # el ejecutable de verdad y no la linea de comandos.
-    local PROCS="$HOME/.local/bin/dock-procs"
-    if [ -x "$PROCS" ]; then
-        for out in $("$PROCS" waybar list 2>/dev/null); do
-            [ -z "$out" ] && continue
-            echo "$monitors" | grep -qw "$out" || "$PROCS" waybar signal "$out" TERM
-        done
-    fi
-
-    [ "$missing" = "0" ] && { rm -f "$COOLDOWN_FILE" 2>/dev/null; return 0; }
-
-    local now last
-    now=$(date +%s)
-    # El contenido tiene que ser un numero entero. Aunque el fichero ya no este
-    # en un sitio que otro usuario pueda escribir, validar aqui evita que un
-    # fichero corrupto (o uno de una version anterior) acabe en una expresion
-    # aritmetica con algo que no es un numero.
-    last=$(cat "$COOLDOWN_FILE" 2>/dev/null || echo 0)
-    case "$last" in
-        ''|*[!0-9]*) last=0 ;;
-    esac
-    # 90s: se autorrecupera solo, pero no se martillea.
-    [ $((now - last)) -lt 90 ] && return 0
-    printf '%s\n' "$now" > "$COOLDOWN_FILE" 2>/dev/null || true
-
-    "$HOME/.config/waybar/launch.sh" >/dev/null 2>&1 &
+    pkill -x waybar 2>/dev/null || true
+    pkill -x .waybar-wrapped 2>/dev/null || true
     return 0
 }
 
 handle_monitor_event() {
     sleep 0.8
 
-    # 1. Asegurar Waybar en todos los monitores de forma idempotente
-    if [ -x "$HOME/.config/waybar/launch.sh" ]; then
-        "$HOME/.config/waybar/launch.sh" >/dev/null 2>&1 &
-    fi
+    # 1. Asegurar que Waybar no esté corriendo
+    pkill -x waybar 2>/dev/null || true
+    pkill -x .waybar-wrapped 2>/dev/null || true
 
     # 2. Relanzar Rust-Dock en todas las pantallas
     restart_dock

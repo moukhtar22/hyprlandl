@@ -22,34 +22,14 @@ log() {
     echo "$1" >&2
 }
 
-# Función para ocultar Waybar de forma temporal y segura
+# Función para ocultar barras de forma temporal y segura
 hide_waybar() {
-    local waybar_pids=$(pgrep -x waybar)
-    if [[ -n "$waybar_pids" ]]; then
-        # Usar SIGUSR1 para toggle (ocultar/mostrar)
-        kill -USR1 $waybar_pids 2>/dev/null && log "Waybar ocultado temporalmente" || true
-    fi
+    "$HOME/.local/bin/wallpaper-bars" hide
 }
 
-# Función para mostrar Waybar de forma segura
+# Función para mostrar barras de forma segura
 show_waybar() {
-    local waybar_pids=$(pgrep -x waybar)
-    if [[ -n "$waybar_pids" ]]; then
-        # Verificar si waybar está oculto y mostrarlo
-        kill -USR1 $waybar_pids 2>/dev/null && log "Waybar mostrado nuevamente" || true
-        # Dar un momento para que se procese la señal
-        sleep 0.5
-    else
-        log "Waybar no estaba corriendo, iniciándolo..."
-        "$HOME/.config/waybar/launch.sh" --force > /dev/null 2>&1 &
-        sleep 1
-        # Verificar que se inició correctamente
-        if pgrep -x waybar > /dev/null; then
-            log "Waybar iniciado correctamente"
-        else
-            log "ERROR: No se pudo iniciar waybar en show_waybar"
-        fi
-    fi
+    "$HOME/.local/bin/wallpaper-bars" show
 }
 
 # Función para recargar Waybar CSS
