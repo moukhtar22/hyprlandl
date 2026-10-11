@@ -26,6 +26,7 @@ PanelWindow {
     WlrLayershell.namespace: "waybar"
     color: "transparent"
     property bool showTrayApps: false
+    property var islandRoot: null
 
     // Live pywal colors directly from ~/.cache/wal/colors.json
     FileView {
@@ -718,7 +719,19 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("blueman-manager")
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) {
+                                    barWin.run("blueman-manager")
+                                } else {
+                                    const scrName = (barWin.screen && barWin.screen.name) ? barWin.screen.name : ""
+                                    if (barWin.islandRoot && typeof barWin.islandRoot.toggleBluetooth === "function") {
+                                        barWin.islandRoot.toggleBluetooth(scrName)
+                                    } else {
+                                        barWin.run("quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleBluetooth '" + scrName + "' || quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island openBluetooth '" + scrName + "'")
+                                    }
+                                }
+                            }
                         }
                     }
 

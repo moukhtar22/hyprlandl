@@ -139,7 +139,8 @@
       "on": "󰂯",
       "connected": "󰂱"
     },
-    "on-click": "blueman-manager",
+    "on-click": "quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleBluetooth || blueman-manager",
+    "on-click-right": "blueman-manager",
     "tooltip-format": "{status}",
     "tooltip-format-connected": "{device_enumerate}",
     "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}"
