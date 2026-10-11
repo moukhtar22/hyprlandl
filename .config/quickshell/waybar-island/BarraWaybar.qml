@@ -69,11 +69,40 @@ PanelWindow {
     property string gpuTempStr: "󰔏 51°C"
     property string cavaBars: "________"
 
-    // Right status modules
+    // Bluetooth full state & icons
     property int btConnectedCount: 0
-    property bool btEnabled: true
-    property int wifiSignal: 89
-    readonly property string wifiIconPath: Qt.resolvedUrl("assets/nm-signal.svg")
+    property bool btPowered: true
+    property string btType: "default"
+    property string btDeviceName: ""
+    readonly property string btIcon: {
+        if (!btPowered) return "󰂲" // Off / Disabled
+        if (btConnectedCount === 0) return "󰂯" // On, un-connected
+        if (btType === "audio") return "󰋋" // Headphones / Earbuds / Headset
+        if (btType === "gamepad") return "󰊴" // Controller
+        if (btType === "mouse") return "󰍽" // Mouse
+        if (btType === "keyboard") return "󰌌" // Keyboard
+        if (btType === "phone") return "󰏲" // Smartphone
+        return "󰂱" // Default connected
+    }
+
+    // WiFi / Network full state & icons
+    property bool isEthernet: false
+    property bool isWifiConnected: true
+    property bool isWifiEnabled: true
+    property int wifiSignal: 75
+    property string wifiSsid: ""
+    readonly property string netIcon: {
+        if (isEthernet) return "󰈀"
+        if (!isWifiEnabled) return "󰤪" // Radio disabled / airplane
+        if (!isWifiConnected) return "󰤮" // Disconnected
+        if (wifiSignal >= 75) return "󰤨" // Strongest
+        if (wifiSignal >= 50) return "󰤥" // Good
+        if (wifiSignal >= 25) return "󰤢" // Medium
+        if (wifiSignal > 0) return "󰤟" // Weak
+        return "󰤯" // Very weak / 0%
+    }
+
+    // Audio, Backlight, Battery
     property int volPercent: 46
     property bool volMuted: false
     property bool isHeadphones: false
@@ -137,7 +166,7 @@ PanelWindow {
         onTriggered: if (!wsProc.running) wsProc.running = true
     }
 
-    // 2. Comprehensive System Stats (Accurate CPU calculation, RAM, Temps, Audio, Brightness, Battery)
+    // 2. Comprehensive System Stats (CPU calculation, RAM, Temps, Audio, Brightness, Bluetooth, WiFi, Battery)
     Process {
         id: sysProc
         command: ["bash", "-c", "
@@ -214,20 +243,46 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
             is_hp=0
             if echo \"$sink_name\" | grep -iqE 'headphone|headset|buds|wh-|airpod|ear'; then is_hp=1; fi
 
-            # 8. Bluetooth (Connected Count)
-            bt_count=$(bluetoothctl devices Connected 2>/dev/null | wc -l)
+            # 8. Bluetooth (Powered, Count, Device Type, Name)
+            bt_pow=$(bluetoothctl show 2>/dev/null | grep -q \"Powered: yes\" && echo 1 || echo 0)
+            bt_cnt=$(bluetoothctl devices Connected 2>/dev/null | wc -l)
+            bt_typ=\"default\"
+            bt_name=\"\"
+            if [ \"$bt_cnt\" -gt 0 ]; then
+                first_mac=$(bluetoothctl devices Connected 2>/dev/null | head -n1 | awk '{print $2}')
+                if [ -n \"$first_mac\" ]; then
+                    bt_name=$(bluetoothctl devices Connected 2>/dev/null | head -n1 | cut -d' ' -f3-)
+                    dev_icon=$(bluetoothctl info \"$first_mac\" 2>/dev/null | grep \"Icon:\" | awk '{print $2}')
+                    case \"$dev_icon\" in
+                        *headphone*|*headset*|*audio*) bt_typ=\"audio\" ;;
+                        *gamepad*|*joystick*) bt_typ=\"gamepad\" ;;
+                        *mouse*) bt_typ=\"mouse\" ;;
+                        *keyboard*) bt_typ=\"keyboard\" ;;
+                        *phone*) bt_typ=\"phone\" ;;
+                        *) bt_typ=\"default\" ;;
+                    esac
+                fi
+            fi
 
-            # 9. WiFi Signal
-            wifi_sig=$(nmcli -t -f IN-USE,SIGNAL device wifi 2>/dev/null | grep '^\*' | cut -d: -f2)
-            [ -z \"$wifi_sig\" ] && wifi_sig=85
+            # 9. WiFi / Network (Ethernet, WiFi State, Signal, SSID)
+            is_eth=0
+            if nmcli -t -f TYPE,STATE dev 2>/dev/null | grep -q \"^ethernet:connected\"; then is_eth=1; fi
+            is_wifi=0
+            if nmcli -t -f TYPE,STATE dev 2>/dev/null | grep -q \"^wifi:connected\"; then is_wifi=1; fi
+            wifi_en=1
+            if [ \"$(nmcli radio wifi 2>/dev/null)\" = \"disabled\" ]; then wifi_en=0; fi
+            wifi_line=$(nmcli -t -f IN-USE,SIGNAL,SSID dev wifi 2>/dev/null | grep \"^\\*\" | head -n1)
+            wifi_sig=$(echo \"$wifi_line\" | cut -d: -f2)
+            wifi_ssid=$(echo \"$wifi_line\" | cut -d: -f3)
+            [ -z \"$wifi_sig\" ] && wifi_sig=0
 
-            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_count|$wifi_sig|$has_b\"
+            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_cnt|$bt_pow|$bt_typ|$bt_name|$is_eth|$is_wifi|$wifi_en|$wifi_sig|$wifi_ssid|$has_b\"
         "]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
                     const p = text.trim().split("|")
-                    if (p.length >= 13) {
+                    if (p.length >= 20) {
                         barWin.cpuBar = p[0] || "____"
                         barWin.cpuPercent = parseInt(p[1]) || 5
                         barWin.memStr = p[2] || "7.6G/14.9G"
@@ -255,9 +310,21 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         barWin.volPercent = parseInt(p[8]) || 46
                         barWin.volMuted = (p[9] === "1")
                         barWin.isHeadphones = (p[10] === "1")
+
+                        // Bluetooth
                         barWin.btConnectedCount = parseInt(p[11]) || 0
-                        barWin.wifiSignal = parseInt(p[12]) || 85
-                        if (p.length >= 14) barWin.hasBattery = (p[13] === "1")
+                        barWin.btPowered = (p[12] === "1")
+                        barWin.btType = p[13] || "default"
+                        barWin.btDeviceName = p[14] || ""
+
+                        // Network
+                        barWin.isEthernet = (p[15] === "1")
+                        barWin.isWifiConnected = (p[16] === "1")
+                        barWin.isWifiEnabled = (p[17] === "1")
+                        barWin.wifiSignal = parseInt(p[18]) || 0
+                        barWin.wifiSsid = p[19] || ""
+
+                        if (p.length >= 21) barWin.hasBattery = (p[20] === "1")
                     }
                 } catch(e) {}
             }
@@ -385,6 +452,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: cpuRow.implicitWidth + 24
                         radius: 6
                         color: cpuMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: cpuRow
@@ -423,6 +491,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: memRow.implicitWidth + 24
                         radius: 6
                         color: memMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: memRow
@@ -461,6 +530,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: cpuTempRow.implicitWidth + 24
                         radius: 6
                         color: cpuTempMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: cpuTempRow
@@ -493,6 +563,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: gpuTempRow.implicitWidth + 24
                         radius: 6
                         color: gpuTempMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: gpuTempRow
@@ -561,6 +632,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                     anchors.fill: parent
                     radius: 6
                     color: langMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                    Behavior on color { ColorAnimation { duration: 180 } }
                 }
 
                 RowLayout {
@@ -609,12 +681,13 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                     anchors.centerIn: parent
                     spacing: 0
 
-                    // 2.1 Bluetooth
+                    // 2.1 Bluetooth (Dynamic State & Device Icon)
                     Rectangle {
                         implicitHeight: 30
                         implicitWidth: btRow.implicitWidth + 22
                         radius: 6
                         color: btMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: btRow
@@ -622,8 +695,8 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             spacing: 5
 
                             Text {
-                                text: barWin.btConnectedCount > 0 ? "󰂱" : "󰂯"
-                                color: barWin.btConnectedCount > 0 ? barWin.colCava : barWin.colCoral
+                                text: barWin.btIcon
+                                color: !barWin.btPowered ? barWin.colMuted : (barWin.btConnectedCount > 0 ? barWin.colCava : barWin.colCoral)
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 16
                                 font.weight: Font.DemiBold
@@ -650,19 +723,21 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                     // Divider
                     Rectangle { width: 1; implicitHeight: 30; color: barWin.colMuted; opacity: 0.35 }
 
-                    // 2.2 WiFi (Always before other tray apps, matching Waybar order)
+                    // 2.2 WiFi / Network (Dynamic Signal & State Icons)
                     Rectangle {
                         implicitHeight: 30
                         implicitWidth: 32
                         radius: 6
                         color: wifiMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
-                        Image {
+                        Text {
                             anchors.centerIn: parent
-                            width: 16
-                            height: 16
-                            source: barWin.wifiIconPath
-                            fillMode: Image.PreserveAspectFit
+                            text: barWin.netIcon
+                            color: (!barWin.isWifiConnected && !barWin.isEthernet) ? barWin.colCpu : (barWin.isEthernet ? barWin.colRam : barWin.colFg)
+                            font.family: "JetBrainsMono Nerd Font"
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
                         }
 
                         MouseArea {
@@ -694,6 +769,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                             implicitHeight: 30
                             radius: 6
                             color: trayAppMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                            Behavior on color { ColorAnimation { duration: 180 } }
 
                             Image {
                                 anchors.centerIn: parent
@@ -730,6 +806,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: volRow.implicitWidth + 24
                         radius: 6
                         color: volMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: volRow
@@ -784,6 +861,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: briRow.implicitWidth + 24
                         radius: 6
                         color: briMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: briRow
@@ -827,6 +905,7 @@ print(f\"{bars}|{int(total_pct / 4 * 100)}\")
                         implicitWidth: batRow.implicitWidth + 24
                         radius: 6
                         color: batMouse.containsMouse ? Qt.rgba(barWin.colMuted.r, barWin.colMuted.g, barWin.colMuted.b, 0.22) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 180 } }
 
                         RowLayout {
                             id: batRow
