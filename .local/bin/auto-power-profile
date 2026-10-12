@@ -24,32 +24,78 @@ send_notif() {
     fi
 }
 
-# If no battery hardware exists on this system, exit cleanly
-if [ ! -d "$BAT_PATH" ]; then
-    echo "No battery found at $BAT_PATH. Exiting."
+get_power_info() {
+    local has_bat=0
+    local tot_en_now=0
+    local tot_en_full=0
+    local tot_cap=0
+    local count=0
+    local is_chg=0
+
+    for b in /sys/class/power_supply/*; do
+        [ -d "$b" ] || continue
+        if [ "$(cat "$b/type" 2>/dev/null)" = "Battery" ]; then
+            if [ -f "$b/scope" ] && grep -qi "device" "$b/scope"; then continue; fi
+            has_bat=1
+            count=$((count + 1))
+            local c
+            c=$(cat "$b/capacity" 2>/dev/null || echo 0)
+            local s
+            s=$(cat "$b/status" 2>/dev/null || echo "Unknown")
+            local en_now
+            en_now=$(cat "$b/energy_now" 2>/dev/null || cat "$b/charge_now" 2>/dev/null || echo 0)
+            local en_full
+            en_full=$(cat "$b/energy_full" 2>/dev/null || cat "$b/charge_full" 2>/dev/null || echo 0)
+            if [ "$en_full" -gt 0 ] 2>/dev/null; then
+                tot_en_now=$((tot_en_now + en_now))
+                tot_en_full=$((tot_en_full + en_full))
+            fi
+            tot_cap=$((tot_cap + c))
+            if [ "$s" = "Charging" ]; then is_chg=1; fi
+        fi
+    done
+
+    if [ "$has_bat" -eq 0 ]; then
+        echo "0 100 1 0"
+        return
+    fi
+
+    local final_cap=100
+    if [ "$tot_en_full" -gt 0 ] 2>/dev/null; then
+        final_cap=$((tot_en_now * 100 / tot_en_full))
+    elif [ "$count" -gt 0 ]; then
+        final_cap=$((tot_cap / count))
+    fi
+
+    local ac_on=0
+    for a in /sys/class/power_supply/*; do
+        [ -d "$a" ] || continue
+        local atype
+        atype=$(cat "$a/type" 2>/dev/null || true)
+        if [ "$atype" = "Mains" ] || [ "$atype" = "USB" ] || [[ "$a" =~ (AC|ADP|ACAD) ]]; then
+            if [ "$(cat "$a/online" 2>/dev/null)" = "1" ]; then
+                ac_on=1
+                break
+            fi
+        fi
+    done
+    [ "$is_chg" -eq 1 ] && ac_on=1
+
+    echo "1 $final_cap $ac_on $is_chg"
+}
+
+# Initial check: if no battery hardware exists on this system, exit cleanly
+read -r has_bat _ _ _ < <(get_power_info)
+if [ "$has_bat" -eq 0 ]; then
+    echo "No battery hardware found on this system. Exiting."
     exit 0
 fi
 
 while true; do
-    cap=100
-    if [ -f "$BAT_PATH/capacity" ]; then
-        cap=$(cat "$BAT_PATH/capacity" 2>/dev/null || echo 100)
-    fi
-
-    status="Discharging"
-    if [ -f "$BAT_PATH/status" ]; then
-        status=$(cat "$BAT_PATH/status" 2>/dev/null || echo "Discharging")
-    fi
-
-    ac_online=0
-    if [ -f "$AC_PATH/online" ]; then
-        ac_online=$(cat "$AC_PATH/online" 2>/dev/null || echo 0)
-    elif [ "$status" = "Charging" ] || [ "$status" = "Full" ]; then
-        ac_online=1
-    fi
+    read -r has_b cap ac_online is_charging < <(get_power_info)
 
     # Condition 1: Low battery on battery power -> Engage Power Saver
-    if [ "$ac_online" -eq 0 ] && [ "$status" != "Charging" ] && [ "$cap" -le 20 ]; then
+    if [ "$ac_online" -eq 0 ] && [ "$is_charging" -eq 0 ] && [ "$cap" -le 20 ]; then
         if [ ! -f "$STATUS_LOCK" ] && [ -x "$POWERSAVE_HELPER" ]; then
             "$POWERSAVE_HELPER" toggle >/dev/null 2>&1 || true
             send_notif "Power Saver Activated" "Battery is at ${cap}%. Power saver mode engaged automatically." "battery-low"
@@ -57,7 +103,7 @@ while true; do
     fi
 
     # Condition 2: AC plugged back in -> Disengage Power Saver
-    if [ "$ac_online" -eq 1 ] || [ "$status" = "Charging" ] || [ "$cap" -gt 35 ]; then
+    if [ "$ac_online" -eq 1 ] || [ "$is_charging" -eq 1 ] || [ "$cap" -gt 35 ]; then
         if [ -f "$STATUS_LOCK" ] && [ "$ac_online" -eq 1 ] && [ -x "$POWERSAVE_HELPER" ]; then
             "$POWERSAVE_HELPER" toggle >/dev/null 2>&1 || true
             send_notif "Normal Mode Restored" "AC power connected. Power saver mode disengaged." "battery-charging"

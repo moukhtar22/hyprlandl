@@ -46,7 +46,7 @@ def num(value, default=None):
     return int(f) if f.is_integer() else round(f, 2)
 
 
-def battery(name: str) -> dict:
+def battery(name: str, ac_online: bool = False) -> dict:
     d = os.path.join(BASE, name)
 
     def g(f):
@@ -148,19 +148,30 @@ def battery(name: str) -> dict:
     elif status == "Full":
         out["state"] = "Full"
     elif status == "Not charging":
-        out["state"] = "Not charging"
+        out["state"] = "Plugged in" if ac_online else "Not charging"
     else:
         out["state"] = status
 
-    # Icono segun el estado de la carga, como el kernel lo define con
-    # capacity_level, que es mas fino que el porcentaje.
-    level = g("capacity_level")
-    icon = {"Full": "󰁹", "High": "󰁹", "Medium": "󰁸", "Low": "󰁷",
-            "Critical": "󰁶", "None": "󰁺"}.get(level or "", "󰁹")
+    # Icono segun el estado y porcentaje
     if status == "Charging":
         icon = "󰂄"
-    elif status == "Not charging":
-        icon = "󰁷"
+    elif ac_online or status == "Full":
+        if ac_online:
+            icon = "󰚥" if status == "Not charging" else "󰂄"
+        else:
+            icon = "󰁹"
+    else:
+        p = cap if cap is not None else 50
+        if p >= 95: icon = "󰁹"
+        elif p >= 85: icon = "󰂂"
+        elif p >= 75: icon = "󰂁"
+        elif p >= 65: icon = "󰂀"
+        elif p >= 55: icon = "󰁾"
+        elif p >= 45: icon = "󰁽"
+        elif p >= 35: icon = "󰁼"
+        elif p >= 25: icon = "󰁻"
+        elif p >= 15: icon = "󰁺"
+        else: icon = "󰂃"
     out["icon"] = icon
     return out
 
@@ -170,30 +181,42 @@ def main() -> None:
         entries = sorted(os.listdir(BASE))
     except OSError:
         print(json.dumps({"count": 0, "devices": [], "ac": {"present": False, "online": False},
-                          "total_pct": None, "total_w": None}))
+                          "is_charging": False, "total_pct": None, "total_w": None}))
         return
 
-    devices = [battery(n) for n in entries
-               if read(os.path.join(BASE, n, "type")) == "Battery"]
-    devices = [d for d in devices if d.get("present")]
     ac = {"present": False, "online": False}
     for n in entries:
-        if read(os.path.join(BASE, n, "type")) == "Mains":
-            ac = {"present": True,
-                  "online": read(os.path.join(BASE, n, "online")) == "1"}
-            break
+        t = read(os.path.join(BASE, n, "type"))
+        if t in ("Mains", "USB", "USB_PD", "USB_C") or n.startswith(("AC", "ADP", "ACAD")):
+            ac["present"] = True
+            if read(os.path.join(BASE, n, "online")) == "1":
+                ac["online"] = True
+                break
+
+    devices = [battery(n, ac_online=ac["online"]) for n in entries
+               if read(os.path.join(BASE, n, "type")) == "Battery"]
+    devices = [d for d in devices if d.get("present")]
 
     caps = [d["capacity"] for d in devices if d["capacity"] is not None]
     watts = [d["power_w"] for d in devices if d["power_w"] is not None]
-    # Con varias pilas se suman los ciclos de todas: es lo que interesa ver de un
-    # vistazo, cuantas veces se ha cargado la maquina en total.
     cycles = [d["cycles"] for d in devices if d["cycles"] is not None]
+    any_charging = any(d.get("status") == "Charging" for d in devices)
+
+    tot_energy_now = sum(d["energy_now"] for d in devices if d.get("energy_now") is not None)
+    tot_energy_full = sum(d["energy_full"] for d in devices if d.get("energy_full") is not None)
+    if tot_energy_full > 0:
+        total_pct = int(round(tot_energy_now * 100 / tot_energy_full))
+    elif caps:
+        total_pct = int(round(sum(caps) / len(caps)))
+    else:
+        total_pct = None
 
     json.dump({
         "count": len(devices),
         "devices": devices,
         "ac": ac,
-        "total_pct": int(sum(caps) / len(caps)) if caps else None,
+        "is_charging": any_charging,
+        "total_pct": total_pct,
         "total_w": round(sum(watts), 2) if watts else None,
         "total_cycles": sum(cycles) if cycles else None,
     }, sys.stdout)

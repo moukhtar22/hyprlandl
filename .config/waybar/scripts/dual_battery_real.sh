@@ -1,25 +1,42 @@
 #!/bin/bash
 
-# 🔋 Script de Batería Dinámico Inteligente (v3 - Desktop aware)
+# 🔋 Script de Batería Dinámico Inteligente (v3 - Desktop & Multi-battery aware)
 # Detecta automáticamente 0, 1, 2 o más baterías.
 # Si no hay batería, muestra el icono de corriente/sobremesa sin texto.
 
-# 1. Detectar todas las baterías disponibles
-BATS=(/sys/class/power_supply/BAT*)
+# 1. Detectar todas las baterías disponibles (excluyendo periféricos)
 ACTUAL_BATS=()
-
-for bat in "${BATS[@]}"; do
-    if [ -d "$bat" ]; then
-        ACTUAL_BATS+=("$bat")
+for b in /sys/class/power_supply/*; do
+    [ -d "$b" ] || continue
+    if [ "$(cat "$b/type" 2>/dev/null)" = "Battery" ]; then
+        if [ -f "$b/scope" ] && grep -qi "device" "$b/scope"; then continue; fi
+        ACTUAL_BATS+=("$b")
     fi
 done
 
 NUM_BATS=${#ACTUAL_BATS[@]}
 
+# Detectar cargador / corriente
+AC_ONLINE=0
+for a in /sys/class/power_supply/*; do
+    [ -d "$a" ] || continue
+    atype=$(cat "$a/type" 2>/dev/null || true)
+    if [ "$atype" = "Mains" ] || [ "$atype" = "USB" ] || [[ "$a" =~ (AC|ADP|ACAD) ]]; then
+        if [ "$(cat "$a/online" 2>/dev/null)" = "1" ]; then
+            AC_ONLINE=1
+            break
+        fi
+    fi
+done
+
 get_battery_icon() {
     local capacity=$1
     local status=$2
+    local ac_on=$3
     if [[ "$status" == "Charging" ]]; then echo "󰂄";
+    elif [[ "$ac_on" -eq 1 ]]; then
+        if [[ "$status" == "Not charging" ]]; then echo "󰚥";
+        else echo "󰂄"; fi
     elif [[ $capacity -ge 95 ]]; then echo "󰁹";
     elif [[ $capacity -ge 80 ]]; then echo "󰂂";
     elif [[ $capacity -ge 60 ]]; then echo "󰂁";
@@ -46,18 +63,22 @@ for i in "${!ACTUAL_BATS[@]}"; do
     BAT_NAME=$(basename "$BAT_PATH")
     CAP=$(cat "$BAT_PATH/capacity" 2>/dev/null || echo "0")
     STAT=$(cat "$BAT_PATH/status" 2>/dev/null || echo "Unknown")
-    ICON=$(get_battery_icon "$CAP" "$STAT")
-    
+    ICON=$(get_battery_icon "$CAP" "$STAT" "$AC_ONLINE")
+
     TOTAL_CAP=$((TOTAL_CAP + CAP))
-    [ "$STAT" == "Charging" ] && IS_CHARGING=true
-    
+    if [ "$STAT" == "Charging" ] || [ "$AC_ONLINE" -eq 1 ]; then
+        IS_CHARGING=true
+    fi
+
     # Formatear texto de la barra (Icono + Porcentaje)
     if [ $i -gt 0 ]; then TEXT="$TEXT | "; fi
     TEXT="$TEXT$ICON $CAP%"
-    
+
     # Formatear tooltip
     TOOLTIP="$TOOLTIP$BAT_NAME: $CAP% ($STAT)\\n"
 done
+
+[ "$AC_ONLINE" -eq 1 ] && TOOLTIP="${TOOLTIP}Alimentación CA: Conectado\\n"
 
 # 4. Calcular promedio total para la clase CSS
 AVG_CAP=$((TOTAL_CAP / NUM_BATS))

@@ -33,7 +33,7 @@
     "keyboard-name": "at-translated-set-2-keyboard"
   },
   "custom/desktop-power": {
-    "format": "",
+    "format": "󰚥",
     "tooltip": true,
     "tooltip-format": "Alimentación CA (Sin batería)"
   },
@@ -45,7 +45,7 @@
     },
     "format": "{icon} {capacity}% <span foreground='#9a9ea3'>│</span>",
     "format-charging": "󰂄 {capacity}% <span foreground='#9a9ea3'>│</span>",
-    "format-plugged": "󰂄 {capacity}% <span foreground='#9a9ea3'>│</span>",
+    "format-plugged": "󰚥 {capacity}% <span foreground='#9a9ea3'>│</span>",
     "format-icons": [
       "󰁺",
       "󰁻",
@@ -68,7 +68,7 @@
     },
     "format": "{icon} {capacity}%",
     "format-charging": "󰂄 {capacity}%",
-    "format-plugged": "󰂄 {capacity}%",
+    "format-plugged": "󰚥 {capacity}%",
     "format-icons": [
       "󰁺",
       "󰁻",
@@ -90,7 +90,7 @@
     },
     "format": "{icon} {capacity}%",
     "format-charging": "󰂄 {capacity}%",
-    "format-plugged": "󰂄 {capacity}%",
+    "format-plugged": "󰚥 {capacity}%",
     "format-icons": [
       "󰁺",
       "󰁻",

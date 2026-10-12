@@ -124,6 +124,9 @@ PanelWindow {
     property bool hasBattery: true
     property int batPercent: 91
     property bool batCharging: false
+    property bool batPlugged: false
+    property bool batDual: false
+    property string batDetail: ""
     property string batIcon: "󰁹"
 
     // Filter workspaces for current monitor
@@ -287,12 +290,70 @@ print(f\"{bars}|{overall_pct}\")
             fi
             [ -z \"\$gpu_t\" ] && gpu_temp=\"󰔏 --°C\" || gpu_temp=\"󰔏 \$gpu_t\"
 
-            # 5. Battery
+            # 5. Battery & Power detection
             has_b=0
-            if [ -d /sys/class/power_supply/BAT0 ] || [ -d /sys/class/power_supply/BAT1 ]; then
-                has_b=1
-                bat_cap=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || cat /sys/class/power_supply/BAT1/capacity 2>/dev/null || echo 91)
-                bat_status=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null || cat /sys/class/power_supply/BAT1/status 2>/dev/null || echo \"Discharging\")
+            bat_count=0
+            tot_energy_now=0
+            tot_energy_full=0
+            tot_cap=0
+            is_charging=0
+            bat_caps=\"\"
+
+            for b in /sys/class/power_supply/*; do
+                [ -d \"\$b\" ] || continue
+                btype=\$(cat \"\$b/type\" 2>/dev/null || true)
+                if [ \"\$btype\" = \"Battery\" ]; then
+                    if [ -f \"\$b/scope\" ] && grep -qi \"device\" \"\$b/scope\"; then
+                        continue
+                    fi
+                    has_b=1
+                    bat_count=\$((bat_count + 1))
+                    c=\$(cat \"\$b/capacity\" 2>/dev/null || echo 0)
+                    s=\$(cat \"\$b/status\" 2>/dev/null || echo \"Unknown\")
+                    en_now=\$(cat \"\$b/energy_now\" 2>/dev/null || cat \"\$b/charge_now\" 2>/dev/null || echo 0)
+                    en_full=\$(cat \"\$b/energy_full\" 2>/dev/null || cat \"\$b/charge_full\" 2>/dev/null || echo 0)
+
+                    if [ \"\$en_full\" -gt 0 ] 2>/dev/null; then
+                        tot_energy_now=\$((tot_energy_now + en_now))
+                        tot_energy_full=\$((tot_energy_full + en_full))
+                    fi
+                    tot_cap=\$((tot_cap + c))
+                    if [ \"\$s\" = \"Charging\" ]; then
+                        is_charging=1
+                    fi
+                    bname=\$(basename \"\$b\")
+                    [ -n \"\$bat_caps\" ] && bat_caps=\"\$bat_caps \"
+                    bat_caps=\"\${bat_caps}\${bname}: \${c}%\"
+                fi
+            done
+
+            ac_online=0
+            for a in /sys/class/power_supply/*; do
+                [ -d \"\$a\" ] || continue
+                atype=\$(cat \"\$a/type\" 2>/dev/null || true)
+                if [ \"\$atype\" = \"Mains\" ] || [ \"\$atype\" = \"USB\" ] || [[ \"\$a\" =~ (AC|ADP|ACAD) ]]; then
+                    if [ \"\$(cat \"\$a/online\" 2>/dev/null)\" = \"1\" ]; then
+                        ac_online=1
+                        break
+                    fi
+                fi
+            done
+
+            if [ \"\$has_b\" -eq 1 ]; then
+                if [ \"\$tot_energy_full\" -gt 0 ] 2>/dev/null; then
+                    bat_cap=\$((tot_energy_now * 100 / tot_energy_full))
+                elif [ \"\$bat_count\" -gt 0 ]; then
+                    bat_cap=\$((tot_cap / bat_count))
+                else
+                    bat_cap=100
+                fi
+                if [ \"\$is_charging\" -eq 1 ]; then
+                    bat_status=\"Charging\"
+                elif [ \"\$ac_online\" -eq 1 ]; then
+                    bat_status=\"Plugged\"
+                else
+                    bat_status=\"Discharging\"
+                fi
             else
                 bat_cap=100
                 bat_status=\"AC\"
@@ -344,7 +405,7 @@ print(f\"{bars}|{overall_pct}\")
             wifi_ssid=$(echo \"$wifi_line\" | cut -d: -f3)
             [ -z \"$wifi_sig\" ] && wifi_sig=0
 
-            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_cnt|$bt_pow|$bt_typ|$bt_name|$is_eth|$is_wifi|$wifi_en|$wifi_sig|$wifi_ssid|$has_b\"
+            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_cnt|$bt_pow|$bt_typ|$bt_name|$is_eth|$is_wifi|$wifi_en|$wifi_sig|$wifi_ssid|$has_b|$bat_count|$bat_caps\"
         "]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -357,10 +418,20 @@ print(f\"{bars}|{overall_pct}\")
                         barWin.cpuTempStr = p[3] || "󰔏 58°C"
                         barWin.gpuTempStr = p[4] || "󰔏 51°C"
 
-                        barWin.batPercent = parseInt(p[5]) || 91
-                        barWin.batCharging = (p[6] === "Charging" || p[6] === "Full")
-                        if (barWin.batCharging) {
+                        barWin.batPercent = parseInt(p[5]) || 0
+                        const bStatus = p[6] || "Discharging"
+                        barWin.batCharging = (bStatus === "Charging")
+                        barWin.batPlugged = (bStatus === "Plugged" || bStatus === "AC")
+                        const batCount = (p.length >= 22) ? (parseInt(p[21]) || 1) : 1
+                        barWin.batDual = (batCount >= 2)
+                        barWin.batDetail = (p.length >= 23) ? p[22] : ""
+
+                        if (!barWin.hasBattery || bStatus === "AC") {
+                            barWin.batIcon = "󰚥"
+                        } else if (barWin.batCharging) {
                             barWin.batIcon = "󰂄"
+                        } else if (barWin.batPlugged) {
+                            barWin.batIcon = "󰚥"
                         } else {
                             const b = barWin.batPercent
                             if (b > 90) barWin.batIcon = "󰁹"
@@ -1036,14 +1107,14 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.centerIn: parent
                             spacing: 6
                             Text {
-                                text: !barWin.hasBattery ? "" : barWin.batIcon
-                                color: !barWin.hasBattery ? barWin.colBattery : (barWin.batCharging ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
+                                text: !barWin.hasBattery ? "󰚥" : barWin.batIcon
+                                color: !barWin.hasBattery ? barWin.colBattery : ((barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 14
                             }
                             Text {
                                 text: !barWin.hasBattery ? "CA" : (barWin.batPercent + "%")
-                                color: !barWin.hasBattery ? barWin.colBattery : (barWin.batCharging ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
+                                color: !barWin.hasBattery ? barWin.colBattery : ((barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -1055,7 +1126,10 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("$HOME/.local/bin/power-profile-toggle 2>/dev/null || true")
+                            onClicked: {
+                                const scrName = (barWin.screen && barWin.screen.name) ? barWin.screen.name : ""
+                                barWin.run("quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon '" + scrName + "' || $HOME/.local/bin/power-profile-toggle 2>/dev/null || true")
+                            }
                         }
                     }
                 }

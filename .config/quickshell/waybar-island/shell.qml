@@ -13859,7 +13859,7 @@ ShellRoot {
                             anchors.margins: 10
                             spacing: 10
                             Text {
-                                text: (root.batt?.count ?? 0) > 0 ? "󰁹" : "󰚥"
+                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? "󰂄" : "󰚥") : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"
                                 color: root.colAccent
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 20
@@ -13877,9 +13877,10 @@ ShellRoot {
                             Text {
                                 text: (root.batt?.count ?? 0) > 1
                                     ? (root.batt.count) + " " + root.t("bat_devices", "devices") + " · " + (root.batt.total_pct ?? 0) + "% · "
-                                      + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles"))
+                                      + ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery"))
+                                      + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles"))
                                     : ((root.batt?.count ?? 0) === 1
-                                        ? ((root.batt?.total_pct ?? 0) + "% · " + ((root.batt?.ac?.online) ? root.t("bat_charging", "Charging") : root.t("bat_on_battery", "On battery"))
+                                        ? ((root.batt?.total_pct ?? 0) + "% · " + ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery"))
                                           + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles")))
                                         : ((root.batt?.ac?.online ?? true) ? root.t("bat_ac_online", "AC Mains Online") : root.t("bat_ac_active", "Direct Power Supply Active")))
                                 color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
@@ -14400,7 +14401,7 @@ ShellRoot {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            Text { text: (root.batt?.count ?? 0) > 0 ? "󰁹" : "󰚥"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
+                            Text { text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? "󰂄" : "󰚥") : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
                             Text { text: (root.batt?.count ?? 0) > 0 ? "Batteries" : "Power Source"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                             Item { Layout.fillWidth: true }
                             Text {
@@ -14409,7 +14410,7 @@ ShellRoot {
                                 color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
                             }
                             Text {
-                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? root.t("bat_charging", "Charging") : root.t("bat_on_battery", "On battery")) : ((root.batt?.ac?.online ?? true) ? root.t("bat_ac_online", "AC Mains Online") : root.t("bat_external_power", "External Power"))
+                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery")) : ((root.batt?.ac?.online ?? true) ? root.t("bat_ac_online", "AC Mains Online") : root.t("bat_external_power", "External Power"))
                                 color: (root.batt?.ac?.online ?? true) ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
                             }
