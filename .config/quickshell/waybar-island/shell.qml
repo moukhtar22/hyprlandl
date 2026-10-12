@@ -1680,8 +1680,8 @@ ShellRoot {
                 ala: islandWin.sysMonExpanded ? 18 : 6
                 cuerpoRadio: islandWin.sysMonExpanded ? 24 : 10
                 relleno: root.colBg
-                bordeColor: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.14)
-                bordeAncho: 1
+                bordeColor: "transparent"
+                bordeAncho: 0
 
                 Behavior on ala {
                     NumberAnimation {
@@ -1708,8 +1708,8 @@ ShellRoot {
                 anchors.fill: parent
                 anchors.topMargin: 12
                 anchors.leftMargin: 14
-                anchors.rightMargin: 16
-                anchors.bottomMargin: 14
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 24
 
                 opacity: islandWin.sysMonExpanded ? 1.0 : 0.0
                 transform: [

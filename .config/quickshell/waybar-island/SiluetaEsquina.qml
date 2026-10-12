@@ -4,11 +4,11 @@ import QtQuick.Shapes
 Shape {
     id: siluetaEsquina
 
-    property real ala: 16
-    property real cuerpoRadio: 22
+    property real ala: 18
+    property real cuerpoRadio: 24
     property color relleno: "#0d1011"
-    property color bordeColor: Qt.rgba(1, 1, 1, 0.12)
-    property real bordeAncho: 1
+    property color bordeColor: "transparent"
+    property real bordeAncho: 0
 
     antialiasing: true
     layer.enabled: true
@@ -23,59 +23,59 @@ Shape {
 
         readonly property real w: siluetaEsquina.width
         readonly property real h: siluetaEsquina.height
-        readonly property real a: Math.max(0, Math.min(siluetaEsquina.ala, h / 3, w / 6))
-        readonly property real r: Math.max(0, Math.min(siluetaEsquina.cuerpoRadio, h / 2, w / 3))
+        readonly property real g: Math.max(0, Math.min(siluetaEsquina.ala, trazo.h / 3, trazo.w / 6))
+        readonly property real r: Math.max(0, Math.min(siluetaEsquina.cuerpoRadio, trazo.h / 2, trazo.w / 3 - trazo.g))
 
-        // Start at top-left corner of the screen
+        // Start at absolute top-left screen corner (0, 0)
         startX: 0
         startY: 0
 
-        // Flush top border of the screen to the right wing start
+        // 1. Flush down along left screen bezel to left wing tip
         PathLine {
-            x: trazo.w - trazo.a
-            y: 0
+            x: 0
+            y: trazo.h
         }
 
-        // Inverted concave wing connecting seamlessly to the top screen edge
+        // 2. Inverted concave wing fusing into left screen bezel
         PathArc {
-            x: trazo.w
-            y: trazo.a
-            radiusX: trazo.a
-            radiusY: trazo.a
+            x: trazo.g
+            y: Math.max(0, trazo.h - trazo.g)
+            radiusX: trazo.g
+            radiusY: trazo.g
+            direction: PathArc.Clockwise
+        }
+
+        // 3. Bottom edge to bottom-right corner start
+        PathLine {
+            x: Math.max(trazo.g, trazo.w - trazo.g - trazo.r)
+            y: Math.max(0, trazo.h - trazo.g)
+        }
+
+        // 4. Smooth rounded bottom-right corner
+        PathArc {
+            x: Math.max(trazo.g, trazo.w - trazo.g)
+            y: Math.max(0, trazo.h - trazo.g - trazo.r)
+            radiusX: trazo.r
+            radiusY: trazo.r
             direction: PathArc.Counterclockwise
         }
 
-        // Right side vertical edge down to bottom-right corner
+        // 5. Right vertical edge up to top wing start
         PathLine {
+            x: Math.max(trazo.g, trazo.w - trazo.g)
+            y: Math.min(trazo.h, trazo.g)
+        }
+
+        // 6. Inverted concave wing fusing into top screen bezel
+        PathArc {
             x: trazo.w
-            y: Math.max(trazo.a, trazo.h - trazo.r)
-        }
-
-        // Bottom-right smooth rounded corner
-        PathArc {
-            x: Math.max(0, trazo.w - trazo.r)
-            y: trazo.h
-            radiusX: trazo.r
-            radiusY: trazo.r
+            y: 0
+            radiusX: trazo.g
+            radiusY: trazo.g
             direction: PathArc.Clockwise
         }
 
-        // Bottom horizontal edge
-        PathLine {
-            x: trazo.r
-            y: trazo.h
-        }
-
-        // Bottom-left smooth rounded corner
-        PathArc {
-            x: 0
-            y: Math.max(0, trazo.h - trazo.r)
-            radiusX: trazo.r
-            radiusY: trazo.r
-            direction: PathArc.Clockwise
-        }
-
-        // Left side vertical edge flush with the left screen border back to (0, 0)
+        // 7. Flush top screen border back to (0, 0)
         PathLine {
             x: 0
             y: 0
