@@ -485,6 +485,9 @@ print(f\"{bars}|{overall_pct}\")
                 border.color: Qt.rgba(0, 0, 0, 0.45)
                 border.width: 1
 
+                scale: (cpuMouse.pressed || memMouse.pressed || cpuTempMouse.pressed || gpuTempMouse.pressed) ? 0.93 : 1.0
+                Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+
                 RowLayout {
                     id: sysRow
                     anchors.centerIn: parent

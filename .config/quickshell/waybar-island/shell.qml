@@ -1598,7 +1598,7 @@ ShellRoot {
             }
 
             Region {
-                item: islandWin.sysMonExpanded ? sysMonCapsule : null
+                item: (islandWin.sysMonExpanded || sysMonCapsule.opacity > 0) ? sysMonCapsule : null
                 intersection: Intersection.Combine
             }
         }
@@ -1644,24 +1644,57 @@ ShellRoot {
             id: sysMonCapsule
             anchors.top: parent.top
             anchors.left: parent.left
-            width: 600
+            width: islandWin.sysMonExpanded ? 600 : 200
             height: islandWin.sysMonExpanded ? 670 : 0
             clip: true
 
             opacity: islandWin.sysMonExpanded ? 1.0 : 0.0
             visible: opacity > 0
 
-            Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-            Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            Behavior on width {
+                NumberAnimation {
+                    duration: islandWin.sysMonExpanded ? 340 : 220
+                    easing.type: islandWin.sysMonExpanded ? Easing.OutBack : Easing.InCubic
+                    easing.overshoot: 1.07
+                }
+            }
+
+            Behavior on height {
+                NumberAnimation {
+                    duration: islandWin.sysMonExpanded ? 360 : 220
+                    easing.type: islandWin.sysMonExpanded ? Easing.OutBack : Easing.InCubic
+                    easing.overshoot: 1.05
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: islandWin.sysMonExpanded ? 240 : 180
+                    easing.type: Easing.OutCubic
+                }
+            }
 
             // Apple Dynamic Island corner silhouette fused to top-left screen edge
             SiluetaEsquina {
                 anchors.fill: parent
-                ala: 18
-                cuerpoRadio: 24
+                ala: islandWin.sysMonExpanded ? 18 : 6
+                cuerpoRadio: islandWin.sysMonExpanded ? 24 : 10
                 relleno: root.colBg
                 bordeColor: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.14)
                 bordeAncho: 1
+
+                Behavior on ala {
+                    NumberAnimation {
+                        duration: islandWin.sysMonExpanded ? 320 : 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on cuerpoRadio {
+                    NumberAnimation {
+                        duration: islandWin.sysMonExpanded ? 320 : 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
             }
 
             // Intercept clicks inside the capsule so they do not hit cazaClics
@@ -1669,13 +1702,55 @@ ShellRoot {
                 anchors.fill: parent
             }
 
-            ColumnLayout {
+            // Inner content with coordinated slide, scale, and fade choreography
+            Item {
+                id: sysMonContentArea
                 anchors.fill: parent
                 anchors.topMargin: 12
                 anchors.leftMargin: 14
                 anchors.rightMargin: 16
                 anchors.bottomMargin: 14
-                spacing: 10
+
+                opacity: islandWin.sysMonExpanded ? 1.0 : 0.0
+                transform: [
+                    Translate {
+                        y: islandWin.sysMonExpanded ? 0 : -22
+                        Behavior on y {
+                            NumberAnimation {
+                                duration: islandWin.sysMonExpanded ? 320 : 180
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    },
+                    Scale {
+                        origin.x: 0
+                        origin.y: 0
+                        xScale: islandWin.sysMonExpanded ? 1.0 : 0.94
+                        yScale: islandWin.sysMonExpanded ? 1.0 : 0.94
+                        Behavior on xScale {
+                            NumberAnimation {
+                                duration: islandWin.sysMonExpanded ? 320 : 180
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                        Behavior on yScale {
+                            NumberAnimation {
+                                duration: islandWin.sysMonExpanded ? 320 : 180
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
+                ]
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: islandWin.sysMonExpanded ? 240 : 160
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 10
 
                 // 1. Header (Icon, Title, Subtitle, htop button, Refresh, Close)
                 RowLayout {
@@ -2317,6 +2392,7 @@ ShellRoot {
                 }
             }
         }
+    }
 
         // Dynamic Island container fused to top screen edge (Mac notch style)
         Item {
