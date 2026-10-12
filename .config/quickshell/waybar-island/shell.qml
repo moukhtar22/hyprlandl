@@ -104,6 +104,38 @@ ShellRoot {
         }
     }
 
+    property var workspacesData: ({ active_id: 1, next_id: 2, count: 0, workspaces: [] })
+
+    function anyPanelWorkspaces() {
+        return Object.keys(root.islandPanels).some(name => root.islandPanels[name].expanded && root.islandPanels[name].currentTab === 4)
+    }
+
+    function toggleWorkspaces(screenName) {
+        let panel = root.panelForScreen(screenName)
+        if (!panel) {
+            let names = Object.keys(root.islandPanels)
+            if (names.length) panel = root.islandPanels[names[0]]
+        }
+        if (!panel) return "unavailable"
+        root.islandVisible = true
+        if (screenName && screenName !== "all") {
+            let hs = Object.assign({}, root.hiddenScreens)
+            delete hs[screenName]
+            root.hiddenScreens = hs
+        }
+        if (panel.expanded && panel.currentTab === 4) {
+            panel.expanded = false
+            return "collapsed"
+        } else {
+            panel.sysMonExpanded = false
+            panel.expanded = true
+            panel.currentTab = 4
+            panel.controlSubView = 0
+            workspacesProc.running = true
+            return "workspaces"
+        }
+    }
+
     function anyPanelSubView(subView) {
         return Object.keys(root.islandPanels).some(name =>
             root.islandPanels[name].expanded && root.islandPanels[name].controlSubView === subView)
@@ -479,6 +511,7 @@ ShellRoot {
         otaStatusProc.running = true
         otaChangelogProc.running = true
         gpuStatusProc.running = true
+        workspacesProc.running = true
     }
 
     IpcHandler {
@@ -622,6 +655,15 @@ ShellRoot {
         }
         function openGpu(screenName: string): string {
             return open_gpu(screenName)
+        }
+        function toggleWorkspaces(screenName: string): string {
+            return root.toggleWorkspaces(screenName)
+        }
+        function openWorkspaces(screenName: string): string {
+            let panel = root.setPanelState(screenName, true, 4, 0)
+            if (!panel) return "unavailable"
+            workspacesProc.running = true
+            return "workspaces"
         }
         function toggleSysMon(screenName: string): string {
             return root.toggleSysMon(screenName)
@@ -1231,6 +1273,29 @@ ShellRoot {
     }
 
     Process {
+        id: workspacesProc
+        command: ["bash", "-c", "$HOME/.local/bin/notch-workspaces-helper list"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    let d = JSON.parse(text.trim())
+                    if (d && d.workspaces) root.workspacesData = d
+                } catch(e) {}
+            }
+        }
+    }
+
+    Timer {
+        id: workspacesTimer
+        interval: 1000
+        repeat: true
+        running: root.anyPanelWorkspaces()
+        onTriggered: {
+            if (!workspacesProc.running) workspacesProc.running = true
+        }
+    }
+
+    Process {
         id: nightLightCheckProc
         command: ["bash", "-c", "$HOME/.local/bin/toggle-nightlight status"]
         stdout: StdioCollector {
@@ -1500,6 +1565,7 @@ ShellRoot {
             onCurrentTabChanged: {
                 if (islandWin.controlSubView !== 4 && !(root.pairRequest.active && islandWin.currentTab === 0)) islandWin.controlSubView = 0
                 if (islandWin.currentTab === 1) hyprStatusProc.running = true
+                if (islandWin.currentTab === 4) workspacesProc.running = true
                 islandWin.tabFade = 0.0
                 tabFadeReset.restart()
             }
@@ -1507,6 +1573,7 @@ ShellRoot {
                 if (islandWin.expanded) {
                     islandWin.sysMonExpanded = false
                     root.refreshAllStates()
+                    if (islandWin.currentTab === 4) workspacesProc.running = true
                 }
                 else if (!root.anyPanelExpanded()) root.runCmd("$HOME/.local/bin/notch-bt-helper stop_scan")
             }
@@ -2463,7 +2530,7 @@ ShellRoot {
 
 
             readonly property real ala: 16
-            width: islandWin.expanded ? 660 : (root.notifActive ? 460 : (collapsedContent.width + capsule.ala * 2 + 36))
+            width: islandWin.expanded ? (islandWin.currentTab === 4 ? 880 : 660) : (root.notifActive ? 460 : (collapsedContent.width + capsule.ala * 2 + 36))
             height: islandWin.expanded ? Math.min(800, islandContentCol.implicitHeight + 52) : (root.notifActive ? 56 : 36)
 
             Behavior on width {
@@ -3039,33 +3106,32 @@ ShellRoot {
                     // ── 2. SEGMENTED TABS (CONTROL, HYPRLAND & ALERTS) ──
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 12
+                        Layout.fillWidth: true
+                        spacing: 8
                         visible: islandWin.controlSubView === 0
 
                         // Tab 0: Control & Sistema
                         Rectangle {
-                            // 4 x 136 + 3 x 12 = 580, dentro de los 584 de la columna.
-                            // Con 140 eran 596 y Qt empujaba todo 12 px a la derecha.
-                            width: 136
-                            height: 34
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             radius: 17
                             color: islandWin.currentTab === 0 ? root.colAccent : root.colSurface
                             Behavior on color { ColorAnimation { duration: 150 } }
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 8
+                                spacing: 6
                                 Text {
                                     text: "󰒓"
                                     color: islandWin.currentTab === 0 ? root.colBg : root.colAccent
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 14
+                                    font.pixelSize: 13
                                 }
                                 Text {
                                     text: "Control"
                                     color: islandWin.currentTab === 0 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
                             }
@@ -3080,30 +3146,65 @@ ShellRoot {
                             }
                         }
 
+                        // Tab 4: Workspaces Overview (Super + Tab)
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
+                            radius: 17
+                            color: islandWin.currentTab === 4 ? root.colAccent : root.colSurface
+                            Behavior on color { ColorAnimation { duration: 150 } }
+
+                            RowLayout {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Text {
+                                    text: "󰍹"
+                                    color: islandWin.currentTab === 4 ? root.colBg : root.colAccent
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 13
+                                }
+                                Text {
+                                    text: "Spaces"
+                                    color: islandWin.currentTab === 4 ? root.colBg : root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    islandWin.currentTab = 4
+                                    islandWin.controlSubView = 0
+                                    workspacesProc.running = true
+                                }
+                            }
+                        }
+
                         // Tab 1: Hyprland Settings
                         Rectangle {
-                            // 4 x 136 + 3 x 12 = 580, dentro de los 584 de la columna.
-                            // Con 140 eran 596 y Qt empujaba todo 12 px a la derecha.
-                            width: 136
-                            height: 34
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             radius: 17
                             color: islandWin.currentTab === 1 ? root.colAccent : root.colSurface
                             Behavior on color { ColorAnimation { duration: 150 } }
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 8
+                                spacing: 6
                                 Text {
                                     text: "󰣇"
                                     color: islandWin.currentTab === 1 ? root.colBg : root.colAccent
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 14
+                                    font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Hyprland"
+                                    text: "Hypr"
                                     color: islandWin.currentTab === 1 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
                             }
@@ -3120,35 +3221,33 @@ ShellRoot {
 
                         // Tab 2: Alerts
                         Rectangle {
-                            // 4 x 136 + 3 x 12 = 580, dentro de los 584 de la columna.
-                            // Con 140 eran 596 y Qt empujaba todo 12 px a la derecha.
-                            width: 136
-                            height: 34
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             radius: 17
                             color: islandWin.currentTab === 2 ? root.colAccent : root.colSurface
                             Behavior on color { ColorAnimation { duration: 150 } }
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 8
+                                spacing: 6
                                 Text {
                                     text: "󰂚"
                                     color: islandWin.currentTab === 2 ? root.colBg : root.colAccent
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 14
+                                    font.pixelSize: 13
                                 }
                                 Text {
                                     text: "Alerts"
                                     color: islandWin.currentTab === 2 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
                                 Rectangle {
                                     visible: root.notifUnread > 0
-                                    height: 18
-                                    width: Math.max(18, tabPillCount.implicitWidth + 10)
-                                    radius: 9
+                                    height: 16
+                                    width: Math.max(16, tabPillCount.implicitWidth + 8)
+                                    radius: 8
                                     color: islandWin.currentTab === 2 ? root.colBg : root.colAccent
                                     Text {
                                         id: tabPillCount
@@ -3156,7 +3255,7 @@ ShellRoot {
                                         text: root.notifUnread > 9 ? "9+" : root.notifUnread
                                         color: islandWin.currentTab === 2 ? root.colAccent : root.colBg
                                         font.family: "JetBrainsMono Nerd Font"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 9
                                         font.weight: Font.Bold
                                     }
                                 }
@@ -3175,28 +3274,26 @@ ShellRoot {
 
                         // Tab 3: Portapapeles (opcion aparte de Alertas, arriba)
                         Rectangle {
-                            // 4 x 136 + 3 x 12 = 580, dentro de los 584 de la columna.
-                            // Con 140 eran 596 y Qt empujaba todo 12 px a la derecha.
-                            width: 136
-                            height: 34
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             radius: 17
                             color: islandWin.currentTab === 3 ? root.colAccent : root.colSurface
                             Behavior on color { ColorAnimation { duration: 150 } }
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 8
+                                spacing: 6
                                 Text {
                                     text: "󰅍"
                                     color: islandWin.currentTab === 3 ? root.colBg : root.colAccent
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 14
+                                    font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Clipboard"
+                                    text: "Clips"
                                     color: islandWin.currentTab === 3 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
                             }
@@ -7216,6 +7313,569 @@ Flickable {
                             }
                         }
 
+                    }
+
+                    // ── TAB 4: WORKSPACES OVERVIEW (Super + Tab) ──
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        visible: islandWin.currentTab === 4 && islandWin.controlSubView === 0
+                        opacity: islandWin.tabFade
+
+                        Timer {
+                            id: wsProcRefreshTimer
+                            interval: 200
+                            repeat: false
+                            onTriggered: workspacesProc.running = true
+                        }
+
+                        // Header Bar: Title, Active Pill, Add Space button, Refresh button
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Text {
+                                text: "󰍹 Workspaces Overview"
+                                color: root.colFg
+                                font.family: "JetBrainsMono Nerd Font"
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                            }
+
+                            Rectangle {
+                                height: 22
+                                implicitWidth: wsActivePillText.implicitWidth + 14
+                                radius: 11
+                                color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.18)
+                                border.color: root.colAccent
+                                border.width: 1
+                                Text {
+                                    id: wsActivePillText
+                                    anchors.centerIn: parent
+                                    text: "Space " + (root.workspacesData?.active_id || 1) + " Active"
+                                    color: root.colAccent
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // + Add Space Button
+                            Rectangle {
+                                height: 30
+                                implicitWidth: addWsRow.implicitWidth + 20
+                                radius: 15
+                                color: addWsMouse.containsMouse ? root.colAccentHover : root.colAccent
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                RowLayout {
+                                    id: addWsRow
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Text {
+                                        text: "󰐕"
+                                        color: root.colBg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+                                    Text {
+                                        text: "Add Space"
+                                        color: root.colBg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: addWsMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.runCmd("$HOME/.local/bin/notch-workspaces-helper add")
+                                        wsProcRefreshTimer.restart()
+                                    }
+                                }
+                            }
+
+                            // Refresh button
+                            Rectangle {
+                                width: 30; height: 30; radius: 15
+                                color: wsRefMouse.containsMouse ? root.colSurfaceHover : root.colSurface
+                                border.color: root.colBorder; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "󰑐"
+                                    color: root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 12
+                                }
+                                MouseArea {
+                                    id: wsRefMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: workspacesProc.running = true
+                                }
+                            }
+                        }
+
+                        // Workspaces Live Visual Grid (Mission Control style miniature desktops)
+                        Flickable {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(480, wsGridContent.implicitHeight)
+                            contentHeight: wsGridContent.implicitHeight
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+
+                            ColumnLayout {
+                                id: wsGridContent
+                                width: parent.width
+                                spacing: 12
+
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 2
+                                    rowSpacing: 12
+                                    columnSpacing: 12
+
+                                    Repeater {
+                                        model: root.workspacesData?.workspaces || []
+
+                                        delegate: Rectangle {
+                                            id: wsCard
+                                            readonly property int cardWsId: modelData.id
+                                            readonly property var cardClients: modelData.clients || []
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: cardCol.implicitHeight + 20
+                                            radius: 14
+                                            color: cardHover.containsMouse ? root.colSurfaceHover : root.colSurface
+                                            border.color: modelData.is_active ? root.colAccent : root.colBorder
+                                            border.width: modelData.is_active ? 2 : 1
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                                            MouseArea {
+                                                id: cardHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    root.runCmd("$HOME/.local/bin/notch-workspaces-helper switch " + wsCard.cardWsId)
+                                                    wsProcRefreshTimer.restart()
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                id: cardCol
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                spacing: 8
+
+                                                // Card Header: Space ID, Monitor, Windows count, Remove Workspace button
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 8
+
+                                                    Rectangle {
+                                                        height: 24
+                                                        implicitWidth: spaceBadgeText.implicitWidth + 14
+                                                        radius: 12
+                                                        color: modelData.is_active ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.1)
+                                                        Text {
+                                                            id: spaceBadgeText
+                                                            anchors.centerIn: parent
+                                                            text: "󰍹 Space " + modelData.id
+                                                            color: modelData.is_active ? root.colBg : root.colFg
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 11
+                                                            font.weight: Font.Bold
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        text: modelData.monitor || ""
+                                                        color: root.colMuted
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 10
+                                                    }
+
+                                                    Item { Layout.fillWidth: true }
+
+                                                    Text {
+                                                        text: (wsCard.cardClients.length) + (wsCard.cardClients.length === 1 ? " window" : " windows")
+                                                        color: root.colMuted
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 10
+                                                    }
+
+                                                    // Remove Workspace Button (󰅖)
+                                                    Rectangle {
+                                                        width: 22; height: 22; radius: 11
+                                                        color: closeWsHover.containsMouse ? Qt.rgba(1, 0.2, 0.2, 0.3) : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                                        border.color: closeWsHover.containsMouse ? "#ff5555" : "transparent"
+                                                        border.width: 1
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "󰅖"
+                                                            color: closeWsHover.containsMouse ? "#ff5555" : root.colMuted
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 11
+                                                        }
+
+                                                        MouseArea {
+                                                            id: closeWsHover
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                root.runCmd("$HOME/.local/bin/notch-workspaces-helper remove " + wsCard.cardWsId)
+                                                                wsProcRefreshTimer.restart()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // ── MINIATURE DESKTOP VIEWPORT (16:9 Live Desktop Canvas) ──
+                                                Rectangle {
+                                                    id: miniDesktopCanvas
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: Math.round(width * (9.0 / 16.0))
+                                                    radius: 10
+                                                    clip: true
+                                                    color: Qt.rgba(0, 0, 0, 0.55)
+                                                    border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.14)
+                                                    border.width: 1
+
+                                                    // Subtle background tint
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.04)
+                                                    }
+
+                                                    // Real Windows rendered at exact proportional positions & sizes
+                                                    Repeater {
+                                                        model: wsCard.cardClients
+
+                                                        delegate: Rectangle {
+                                                            id: winTile
+                                                            x: Math.max(2, Math.min(miniDesktopCanvas.width - width - 2, Math.round(modelData.rel_x * miniDesktopCanvas.width)))
+                                                            y: Math.max(2, Math.min(miniDesktopCanvas.height - height - 2, Math.round(modelData.rel_y * miniDesktopCanvas.height)))
+                                                            width: Math.max(46, Math.min(miniDesktopCanvas.width - x - 2, Math.round(modelData.rel_w * miniDesktopCanvas.width)))
+                                                            height: Math.max(34, Math.min(miniDesktopCanvas.height - y - 2, Math.round(modelData.rel_h * miniDesktopCanvas.height)))
+                                                            radius: 6
+                                                            clip: true
+                                                            color: "#16161e"
+                                                            border.color: modelData.is_focused ? root.colAccent : (winTileHover.containsMouse ? root.colFg : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.25))
+                                                            border.width: modelData.is_focused ? 2 : 1
+                                                            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                                                            // 1. Live Window Thumbnail Snapshot
+                                                            Image {
+                                                                anchors.fill: parent
+                                                                anchors.topMargin: 18
+                                                                source: "file://" + modelData.thumb
+                                                                fillMode: Image.PreserveAspectCrop
+                                                                asynchronous: true
+                                                                smooth: true
+                                                                cache: false
+                                                                opacity: winTileHover.containsMouse ? 1.0 : 0.88
+                                                                Behavior on opacity { NumberAnimation { duration: 120 } }
+                                                            }
+
+                                                            // 2. Window Titlebar Header (macOS / GNOME style)
+                                                            Rectangle {
+                                                                id: winTitlebar
+                                                                anchors.top: parent.top
+                                                                anchors.left: parent.left
+                                                                anchors.right: parent.right
+                                                                height: 18
+                                                                color: Qt.rgba(0, 0, 0, 0.85)
+
+                                                                RowLayout {
+                                                                    anchors.fill: parent
+                                                                    anchors.leftMargin: 4
+                                                                    anchors.rightMargin: 4
+                                                                    spacing: 4
+
+                                                                    // Red Close Dot (✕)
+                                                                    Rectangle {
+                                                                        width: 10; height: 10; radius: 5
+                                                                        color: closeWinDotHover.containsMouse ? "#ff4444" : Qt.rgba(1, 0.35, 0.35, 0.8)
+                                                                        Text {
+                                                                            anchors.centerIn: parent
+                                                                            text: "✕"
+                                                                            color: "#ffffff"
+                                                                            font.pixelSize: 7
+                                                                            font.family: "JetBrainsMono Nerd Font"
+                                                                            font.weight: Font.Bold
+                                                                            visible: closeWinDotHover.containsMouse
+                                                                        }
+                                                                        MouseArea {
+                                                                            id: closeWinDotHover
+                                                                            anchors.fill: parent
+                                                                            hoverEnabled: true
+                                                                            cursorShape: Qt.PointingHandCursor
+                                                                            onClicked: {
+                                                                                root.runCmd("$HOME/.local/bin/notch-workspaces-helper close_window " + modelData.address)
+                                                                                wsProcRefreshTimer.restart()
+                                                                            }
+                                                                        }
+                                                                    }
+
+                                                                    Text {
+                                                                        text: modelData.icon || "󰘔"
+                                                                        color: root.colAccent
+                                                                        font.family: "JetBrainsMono Nerd Font"
+                                                                        font.pixelSize: 9
+                                                                    }
+
+                                                                    Text {
+                                                                        text: modelData.title || modelData.app_name
+                                                                        color: "#ffffff"
+                                                                        font.family: "JetBrainsMono Nerd Font"
+                                                                        font.pixelSize: 8
+                                                                        font.weight: Font.Bold
+                                                                        elide: Text.ElideRight
+                                                                        Layout.fillWidth: true
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            // 3. Hover and Click Handler to focus window
+                                                            MouseArea {
+                                                                id: winTileHover
+                                                                anchors.fill: parent
+                                                                anchors.topMargin: 18
+                                                                hoverEnabled: true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: {
+                                                                    root.runCmd("$HOME/.local/bin/notch-workspaces-helper switch " + wsCard.cardWsId + "; hyprctl dispatch focuswindow address:" + modelData.address)
+                                                                    wsProcRefreshTimer.restart()
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Empty workspace placeholder
+                                                    Item {
+                                                        anchors.fill: parent
+                                                        visible: wsCard.cardClients.length === 0
+
+                                                        ColumnLayout {
+                                                            anchors.centerIn: parent
+                                                            spacing: 6
+
+                                                            Text {
+                                                                text: "󰘔"
+                                                                color: root.colMuted
+                                                                font.family: "JetBrainsMono Nerd Font"
+                                                                font.pixelSize: 22
+                                                                Layout.alignment: Qt.AlignHCenter
+                                                            }
+                                                            Text {
+                                                                text: "Empty Workspace"
+                                                                color: root.colMuted
+                                                                font.family: "JetBrainsMono Nerd Font"
+                                                                font.pixelSize: 11
+                                                                font.weight: Font.Bold
+                                                                Layout.alignment: Qt.AlignHCenter
+                                                            }
+                                                            Text {
+                                                                text: "Click to focus Space " + wsCard.cardWsId
+                                                                color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.4)
+                                                                font.family: "JetBrainsMono Nerd Font"
+                                                                font.pixelSize: 9
+                                                                Layout.alignment: Qt.AlignHCenter
+                                                            }
+                                                        }
+
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                root.runCmd("$HOME/.local/bin/notch-workspaces-helper switch " + wsCard.cardWsId)
+                                                                wsProcRefreshTimer.restart()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Mini footer chips for open windows in this space
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 6
+                                                    visible: wsCard.cardClients.length > 0
+
+                                                    Repeater {
+                                                        model: wsCard.cardClients.slice(0, 3)
+
+                                                        delegate: Rectangle {
+                                                            height: 20
+                                                            implicitWidth: Math.min(130, chipText.implicitWidth + 20)
+                                                            radius: 10
+                                                            color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                                            border.color: modelData.is_focused ? root.colAccent : "transparent"
+                                                            border.width: 1
+
+                                                            RowLayout {
+                                                                anchors.centerIn: parent
+                                                                spacing: 4
+                                                                Text {
+                                                                    text: modelData.icon || "󰘔"
+                                                                    color: root.colAccent
+                                                                    font.family: "JetBrainsMono Nerd Font"
+                                                                    font.pixelSize: 9
+                                                                }
+                                                                Text {
+                                                                    id: chipText
+                                                                    text: modelData.app_name || modelData.class
+                                                                    color: root.colFg
+                                                                    font.family: "JetBrainsMono Nerd Font"
+                                                                    font.pixelSize: 9
+                                                                    elide: Text.ElideRight
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        visible: wsCard.cardClients.length > 3
+                                                        text: "+" + (wsCard.cardClients.length - 3) + " more"
+                                                        color: root.colMuted
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 9
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // + Add New Workspace Card
+                                    Rectangle {
+                                        id: addWsCard
+                                        readonly property bool isFullWidth: ((root.workspacesData?.workspaces?.length || 0) % 2 === 0)
+                                        Layout.fillWidth: true
+                                        Layout.columnSpan: addWsCard.isFullWidth ? 2 : 1
+                                        Layout.preferredHeight: addWsCard.isFullWidth ? 56 : 240
+                                        radius: 14
+                                        color: addCardHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.04)
+                                        border.color: addCardHover.containsMouse ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.15)
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                                        // Horizontal row when full width
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 12
+                                            visible: addWsCard.isFullWidth
+
+                                            Rectangle {
+                                                width: 32; height: 32; radius: 16
+                                                color: addCardHover.containsMouse ? root.colAccent : Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.18)
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "󰐕"
+                                                    color: addCardHover.containsMouse ? root.colBg : root.colAccent
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 16
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "Create New Workspace"
+                                                color: root.colFg
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 12
+                                                font.weight: Font.Bold
+                                            }
+
+                                            Text {
+                                                text: "• Space " + (root.workspacesData?.next_id || "+")
+                                                color: root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                        }
+
+                                        // Vertical column when single card
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 8
+                                            visible: !addWsCard.isFullWidth
+
+                                            Rectangle {
+                                                width: 44; height: 44; radius: 22
+                                                color: addCardHover.containsMouse ? root.colAccent : Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15)
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                                Layout.alignment: Qt.AlignHCenter
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "󰐕"
+                                                    color: addCardHover.containsMouse ? root.colBg : root.colAccent
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 22
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "Create Workspace"
+                                                color: root.colFg
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 12
+                                                font.weight: Font.Bold
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+
+                                            Text {
+                                                text: "Space " + (root.workspacesData?.next_id || "+")
+                                                color: root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 10
+                                                Layout.alignment: Qt.AlignHCenter
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: addCardHover
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/notch-workspaces-helper add")
+                                                wsProcRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Bottom Help Hint
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Layout.topMargin: 2
+
+                            Text {
+                                text: "󰌌 Super + Tab toggles Overview • Click card to switch • 󰅖 removes space"
+                                color: root.colMuted
+                                font.family: "JetBrainsMono Nerd Font"
+                                font.pixelSize: 10
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                        }
                     }
 
                     // ── 5. SUBSECCIÓN: NIGHT LIGHT ──

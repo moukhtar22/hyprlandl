@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import json
+import glob
+
+# Ensure environment variables are set for Hyprland IPC
+xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+os.environ["XDG_RUNTIME_DIR"] = xdg_runtime
+
+if "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
+    sig_paths = glob.glob(f"{xdg_runtime}/hypr/*")
+    if sig_paths:
+        sig_paths.sort(key=os.path.getmtime, reverse=True)
+        for sp in sig_paths:
+            base = os.path.basename(sp)
+            if not base.endswith(".lock"):
+                os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = base
+                break
+
+APP_MAP = {
+    "kitty": ("󰞷", "Kitty"),
+    "alacritty": ("󰞷", "Alacritty"),
+    "foot": ("󰞷", "Foot"),
+    "ghostty": ("󰞷", "Ghostty"),
+    "xterm": ("󰞷", "Terminal"),
+    "brave-origin-nightly": ("󰖟", "Brave Nightly"),
+    "brave-browser": ("󰖟", "Brave"),
+    "brave": ("󰖟", "Brave"),
+    "firefox": ("󰈹", "Firefox"),
+    "chromium": ("󰖟", "Chromium"),
+    "google-chrome": ("󰊯", "Chrome"),
+    "code": ("󰨞", "VS Code"),
+    "code-oss": ("󰨞", "Code - OSS"),
+    "vscodium": ("󰨞", "VSCodium"),
+    "cursor": ("󰨞", "Cursor"),
+    "discord": ("󰙯", "Discord"),
+    "webcord": ("󰙯", "Webcord"),
+    "vesktop": ("󰙯", "Vesktop"),
+    "telegram-desktop": ("󰒱", "Telegram"),
+    "slack": ("󰒱", "Slack"),
+    "spotify": ("󰓇", "Spotify"),
+    "steam": ("󰓓", "Steam"),
+    "lutris": ("󰓓", "Lutris"),
+    "heroic": ("󰓓", "Heroic"),
+    "thunar": ("󰉋", "Thunar"),
+    "nautilus": ("󰉋", "Files"),
+    "dolphin": ("󰉋", "Dolphin"),
+    "pavucontrol": ("󰕾", "Audio"),
+    "mpv": ("󰕼", "MPV"),
+    "vlc": ("󰕼", "VLC"),
+    "obs": ("󰑋", "OBS"),
+    "gimp": ("󰽉", "GIMP"),
+    "inkscape": ("󰽉", "Inkscape"),
+    "blender": ("󰽉", "Blender"),
+}
+
+def resolve_app(app_class, title=""):
+    cl = (app_class or "").lower().strip()
+    if cl in APP_MAP:
+        return APP_MAP[cl]
+    for k, (icon, name) in APP_MAP.items():
+        if k in cl:
+            return (icon, name)
+    if "term" in cl:
+        return ("󰞷", app_class)
+    if "browser" in cl or "web" in cl:
+        return ("󰖟", app_class)
+    if "edit" in cl or "code" in cl:
+        return ("󰨞", app_class)
+    return ("󰘔", app_class if app_class else "Application")
+
+from concurrent.futures import ThreadPoolExecutor
+
+def run_hyprctl(args):
+    try:
+        res = subprocess.run(["hyprctl"] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
+        return res.stdout
+    except Exception:
+        return ""
+
+def list_workspaces():
+    try:
+        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
+    except Exception:
+        ws_raw = []
+
+    try:
+        clients_raw = json.loads(run_hyprctl(["-j", "clients"]))
+    except Exception:
+        clients_raw = []
+
+    try:
+        monitors_raw = json.loads(run_hyprctl(["-j", "monitors"]))
+    except Exception:
+        monitors_raw = []
+
+    try:
+        active_ws_raw = json.loads(run_hyprctl(["-j", "activeworkspace"]))
+        active_id = active_ws_raw.get("id", 1)
+    except Exception:
+        active_id = 1
+
+    mon_by_id = {m.get("id"): m for m in monitors_raw}
+    mon_by_name = {m.get("name"): m for m in monitors_raw}
+    default_mon = monitors_raw[0] if monitors_raw else {"x": 0, "y": 0, "width": 1920, "height": 1080}
+
+    # Extract all existing workspace ids
+    existing_ids = set()
+    for w in ws_raw:
+        if isinstance(w.get("id"), int) and w.get("id") > 0:
+            existing_ids.add(w.get("id"))
+    if isinstance(active_id, int) and active_id > 0:
+        existing_ids.add(active_id)
+
+    # Next available workspace id
+    next_id = 1
+    while next_id in existing_ids:
+        next_id += 1
+
+    # Build workspace map
+    ws_dict = {}
+    for w in ws_raw:
+        wid = w.get("id")
+        if not isinstance(wid, int) or wid <= 0:
+            continue
+        ws_dict[wid] = {
+            "id": wid,
+            "name": str(w.get("name", wid)),
+            "monitor": str(w.get("monitor", "")),
+            "is_active": (wid == active_id),
+            "windows_count": w.get("windows", 0),
+            "clients": []
+        }
+
+    # Ensure active workspace is in the list even if empty
+    if active_id > 0 and active_id not in ws_dict:
+        active_monitor = active_ws_raw.get("monitor", "")
+        ws_dict[active_id] = {
+            "id": active_id,
+            "name": str(active_ws_raw.get("name", active_id)),
+            "monitor": active_monitor,
+            "is_active": True,
+            "windows_count": 0,
+            "clients": []
+        }
+
+    # Group clients and calculate relative positions
+    visible_clients_to_cap = []
+    for c in clients_raw:
+        cw = c.get("workspace", {})
+        wid = cw.get("id") if isinstance(cw, dict) else None
+        if wid is None or wid not in ws_dict:
+            continue
+
+        cl_class = c.get("class", "")
+        cl_title = c.get("title", "")
+        addr = c.get("address", "")
+        addr_clean = addr.replace("0x", "")
+        icon, app_name = resolve_app(cl_class, cl_title)
+
+        # Monitor bounds
+        mon = mon_by_id.get(c.get("monitor")) or mon_by_name.get(ws_dict[wid]["monitor"]) or default_mon
+        mx = mon.get("x", 0)
+        my = mon.get("y", 0)
+        mw = max(1, mon.get("width", 1920))
+        mh = max(1, mon.get("height", 1080))
+
+        cx, cy = c.get("at", [0, 0])
+        cw_px, ch_px = c.get("size", [mw, mh])
+
+        rx = max(0.0, min(0.95, (cx - mx) / mw))
+        ry = max(0.0, min(0.95, (cy - my) / mh))
+        rw = max(0.05, min(1.0, cw_px / mw))
+        rh = max(0.05, min(1.0, ch_px / mh))
+
+        thumb_path = f"/tmp/hypr_win_{addr_clean}.png"
+
+        client_entry = {
+            "address": addr,
+            "clean_addr": addr_clean,
+            "thumb": thumb_path,
+            "class": cl_class,
+            "title": cl_title,
+            "icon": icon,
+            "app_name": app_name,
+            "pid": c.get("pid", 0),
+            "floating": bool(c.get("floating", False)),
+            "is_focused": (c.get("focusHistoryID", -1) == 0),
+            "rel_x": rx,
+            "rel_y": ry,
+            "rel_w": rw,
+            "rel_h": rh
+        }
+        ws_dict[wid]["clients"].append(client_entry)
+
+        # If window is currently mapped and visible, add to thumbnail capture queue
+        if not c.get("hidden", False) and c.get("mapped", True):
+            visible_clients_to_cap.append((cx, cy, cw_px, ch_px, thumb_path))
+
+    # Fast background capture of window thumbnails using grim
+    def do_cap(item):
+        cx, cy, cw_px, ch_px, path = item
+        try:
+            subprocess.run(["grim", "-c", "-s", "0.2", "-g", f"{cx},{cy} {cw_px}x{ch_px}", path],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=0.8)
+        except Exception:
+            pass
+
+    if visible_clients_to_cap:
+        try:
+            with ThreadPoolExecutor(max_workers=min(4, len(visible_clients_to_cap))) as ex:
+                ex.map(do_cap, visible_clients_to_cap)
+        except Exception:
+            pass
+
+    # Update actual window count from clients list if higher
+    for wid, data in ws_dict.items():
+        if len(data["clients"]) > data["windows_count"]:
+            data["windows_count"] = len(data["clients"])
+
+    # Sort workspaces by ID
+    sorted_ws = [ws_dict[k] for k in sorted(ws_dict.keys())]
+
+    output = {
+        "active_id": active_id,
+        "next_id": next_id,
+        "count": len(sorted_ws),
+        "workspaces": sorted_ws
+    }
+    print(json.dumps(output))
+
+def add_workspace(target_id=None):
+    if target_id is None:
+        try:
+            ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
+            existing_ids = {w.get("id") for w in ws_raw if isinstance(w.get("id"), int) and w.get("id") > 0}
+        except Exception:
+            existing_ids = set()
+        
+        cand = 1
+        while cand in existing_ids:
+            cand += 1
+        target_id = cand
+
+    run_hyprctl(["dispatch", "workspace", str(target_id)])
+    print(json.dumps({"status": "created", "id": target_id}))
+
+def remove_workspace(target_id):
+    try:
+        wid = int(target_id)
+    except ValueError:
+        print(json.dumps({"status": "error", "message": "invalid id"}))
+        return
+
+    try:
+        clients_raw = json.loads(run_hyprctl(["-j", "clients"]))
+        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
+        active_ws_raw = json.loads(run_hyprctl(["-j", "activeworkspace"]))
+        active_id = active_ws_raw.get("id", 1)
+    except Exception:
+        clients_raw, ws_raw, active_id = [], [], 1
+
+    # Close all windows on this workspace
+    closed = 0
+    for c in clients_raw:
+        cw = c.get("workspace", {})
+        if isinstance(cw, dict) and cw.get("id") == wid:
+            addr = c.get("address", "")
+            if addr:
+                run_hyprctl(["dispatch", "closewindow", f"address:{addr}"])
+                closed += 1
+
+    # If this workspace was active, switch to another workspace so Hyprland cleans it up
+    if active_id == wid:
+        remaining = [w.get("id") for w in ws_raw if isinstance(w.get("id"), int) and w.get("id") > 0 and w.get("id") != wid]
+        if remaining:
+            new_target = remaining[0]
+        else:
+            new_target = 1 if wid != 1 else 2
+        run_hyprctl(["dispatch", "workspace", str(new_target)])
+
+    print(json.dumps({"status": "removed", "id": wid, "closed_windows": closed}))
+
+def switch_workspace(target_id):
+    run_hyprctl(["dispatch", "workspace", str(target_id)])
+    print(json.dumps({"status": "switched", "id": target_id}))
+
+def close_window(address):
+    if not address.startswith("address:"):
+        address = f"address:{address}"
+    run_hyprctl(["dispatch", "closewindow", address])
+    print(json.dumps({"status": "closed", "address": address}))
+
+def toggle_overview():
+    try:
+        mons = json.loads(run_hyprctl(["-j", "monitors"]))
+        focused_mon = None
+        for m in mons:
+            if m.get("focused"):
+                focused_mon = m.get("name")
+                break
+        if not focused_mon and mons:
+            focused_mon = mons[0].get("name")
+    except Exception:
+        focused_mon = ""
+
+    qml_path = os.path.expanduser("~/.config/quickshell/waybar-island/shell.qml")
+    cmd = ["quickshell", "ipc", "-p", qml_path, "--any-display", "call", "island", "toggleWorkspaces", focused_mon or ""]
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
+    if cmd == "list":
+        list_workspaces()
+    elif cmd == "toggle":
+        toggle_overview()
+    elif cmd == "add":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        add_workspace(target)
+    elif cmd == "remove":
+        if len(sys.argv) > 2:
+            remove_workspace(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "missing workspace id"}))
+    elif cmd == "switch":
+        if len(sys.argv) > 2:
+            switch_workspace(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "missing workspace id"}))
+    elif cmd == "close_window":
+        if len(sys.argv) > 2:
+            close_window(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "missing address"}))
+    else:
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
