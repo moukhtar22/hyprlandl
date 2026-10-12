@@ -4,6 +4,14 @@ export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 # Selector de Wallpapers Premium - Versión SÚPER RÁPIDA
 # Optimizado para carga instantánea y sincronización inmediata de UI/GTK
 
+# Evitar ejecuciones simultáneas duplicadas que puedan fallar en rofi
+# y disparar el trap de salida revelando la isla mientras sigue abierta.
+LOCK_FILE="/tmp/wallpaper-selector.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    exit 0
+fi
+
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -e "$XDG_RUNTIME_DIR/bus" ]; then
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -134,25 +142,24 @@ ISLAND_TARGET="$(get_active_monitor)"
 PREVIEW_DIR="$HOME/.cache/wallpaper-previews"
 ROFI_THEME="$HOME/.config/rofi/wallpaper-select-pywal.rasi"
 
-# Hide/reveal only the active monitor's bars. wallpaper-bars targets the
-# matching Waybar config, rust-dock -o output, and Quickshell screen.
+# Ocultar las barras en todos los monitores para que la isla no quede
+# flotando en ninguna pantalla mientras el selector a pantalla completa está activo.
 hide_all_bars() {
-    "$HOME/.local/bin/wallpaper-bars" hide "$ISLAND_TARGET"
+    "$HOME/.local/bin/wallpaper-bars" hide all
 }
 
 show_all_bars() {
-    "$HOME/.local/bin/wallpaper-bars" show "$ISLAND_TARGET"
+    "$HOME/.local/bin/wallpaper-bars" show all
 }
 
 cleanup() {
     show_all_bars
-    rm -f "$TEMP_LIST" 2>/dev/null || true
+    rm -f "$TEMP_LIST" "$LOCK_FILE" 2>/dev/null || true
+    flock -u 200 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-# Se ocultan las barras YA, no justo antes de rofi: antes de abrirlo se
-# comprueban las 500+ miniaturas y eso tardaba segundos con la isla a la vista,
-# que luego desaparecia de golpe (y volvia al terminar).
+# Se ocultan las barras de inmediato antes de generar miniaturas o lanzar rofi
 hide_all_bars
 
 # Verificar si el directorio existe o sembrar default si está vacío
@@ -248,7 +255,8 @@ fi
 # 5. APLICACIÓN CON ANIMACIÓN SINCRONIZADA
 # Desarmar el trap de salida para evitar que show_all_bars parpadee antes de tiempo
 trap - EXIT INT TERM
-rm -f "$TEMP_LIST" 2>/dev/null || true
+rm -f "$TEMP_LIST" "$LOCK_FILE" 2>/dev/null || true
+flock -u 200 2>/dev/null || true
 
 # Ejecutar transicion suave (las barras ya estan ocultas, sin parpadeos dobles)
 "$HOME/.local/bin/sync-wallpaper-animation" "$selected_path"
