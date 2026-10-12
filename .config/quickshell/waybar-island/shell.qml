@@ -13859,7 +13859,7 @@ ShellRoot {
                             anchors.margins: 10
                             spacing: 10
                             Text {
-                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? "󰂄" : "󰚥") : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"
+                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? "󰂄" : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"
                                 color: root.colAccent
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 20
@@ -14401,7 +14401,7 @@ ShellRoot {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            Text { text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? "󰂄" : "󰚥") : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
+                            Text { text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? "󰂄" : (root.batt?.devices?.[0]?.icon ?? "󰁹")) : "󰚥"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
                             Text { text: (root.batt?.count ?? 0) > 0 ? "Batteries" : "Power Source"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                             Item { Layout.fillWidth: true }
                             Text {

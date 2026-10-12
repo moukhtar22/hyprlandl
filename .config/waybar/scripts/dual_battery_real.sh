@@ -33,10 +33,8 @@ get_battery_icon() {
     local capacity=$1
     local status=$2
     local ac_on=$3
-    if [[ "$status" == "Charging" ]]; then echo "󰂄";
-    elif [[ "$ac_on" -eq 1 ]]; then
-        if [[ "$status" == "Not charging" ]]; then echo "󰚥";
-        else echo "󰂄"; fi
+    if [[ "$status" == "Charging" ]] || [[ "$ac_on" -eq 1 ]]; then
+        echo "󰂄"
     elif [[ $capacity -ge 95 ]]; then echo "󰁹";
     elif [[ $capacity -ge 80 ]]; then echo "󰂂";
     elif [[ $capacity -ge 60 ]]; then echo "󰂁";

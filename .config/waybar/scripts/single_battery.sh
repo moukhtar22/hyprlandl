@@ -81,8 +81,7 @@ get_battery_icon() {
     local capacity=$1
     local is_chg=$2
     local ac_on=$3
-    if [ "$is_chg" = true ]; then echo "󰂄";
-    elif [ "$ac_on" -eq 1 ]; then echo "󰚥";
+    if [ "$is_chg" = true ] || [ "$ac_on" -eq 1 ]; then echo "󰂄";
     elif [[ $capacity -ge 95 ]]; then echo "󰁹";
     elif [[ $capacity -ge 80 ]]; then echo "󰂂";
     elif [[ $capacity -ge 60 ]]; then echo "󰂁";

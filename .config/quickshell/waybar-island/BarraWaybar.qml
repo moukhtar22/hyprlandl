@@ -428,10 +428,8 @@ print(f\"{bars}|{overall_pct}\")
 
                         if (!barWin.hasBattery || bStatus === "AC") {
                             barWin.batIcon = "󰚥"
-                        } else if (barWin.batCharging) {
+                        } else if (barWin.batCharging || barWin.batPlugged) {
                             barWin.batIcon = "󰂄"
-                        } else if (barWin.batPlugged) {
-                            barWin.batIcon = "󰚥"
                         } else {
                             const b = barWin.batPercent
                             if (b > 90) barWin.batIcon = "󰁹"

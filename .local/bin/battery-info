@@ -153,13 +153,10 @@ def battery(name: str, ac_online: bool = False) -> dict:
         out["state"] = status
 
     # Icono segun el estado y porcentaje
-    if status == "Charging":
+    if status == "Charging" or ac_online:
         icon = "󰂄"
-    elif ac_online or status == "Full":
-        if ac_online:
-            icon = "󰚥" if status == "Not charging" else "󰂄"
-        else:
-            icon = "󰁹"
+    elif status == "Full":
+        icon = "󰁹"
     else:
         p = cap if cap is not None else 50
         if p >= 95: icon = "󰁹"
