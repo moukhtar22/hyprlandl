@@ -106,6 +106,53 @@ ShellRoot {
 
     property var workspacesData: ({ active_id: 1, next_id: 2, count: 0, workspaces: [] })
 
+    ListModel {
+        id: workspacesModel
+    }
+
+    function updateWorkspacesModel(newList) {
+        if (!newList || !Array.isArray(newList)) return
+        let newIds = new Set(newList.map(w => w.id))
+        for (let i = workspacesModel.count - 1; i >= 0; i--) {
+            if (!newIds.has(workspacesModel.get(i).id)) {
+                workspacesModel.remove(i)
+            }
+        }
+        for (let item of newList) {
+            let foundIndex = -1
+            for (let i = 0; i < workspacesModel.count; i++) {
+                if (workspacesModel.get(i).id === item.id) {
+                    foundIndex = i
+                    break
+                }
+            }
+            if (foundIndex >= 0) {
+                let cur = workspacesModel.get(foundIndex)
+                if (cur.preview !== item.preview) workspacesModel.setProperty(foundIndex, "preview", item.preview)
+                if (cur.is_active !== item.is_active) workspacesModel.setProperty(foundIndex, "is_active", item.is_active)
+                if (cur.windows_count !== item.windows_count) workspacesModel.setProperty(foundIndex, "windows_count", item.windows_count)
+                if (cur.monitor !== item.monitor) workspacesModel.setProperty(foundIndex, "monitor", item.monitor)
+                if (cur.name !== item.name) workspacesModel.setProperty(foundIndex, "name", item.name)
+            } else {
+                let insertIdx = workspacesModel.count
+                for (let i = 0; i < workspacesModel.count; i++) {
+                    if (workspacesModel.get(i).id > item.id) {
+                        insertIdx = i
+                        break
+                    }
+                }
+                workspacesModel.insert(insertIdx, {
+                    id: item.id,
+                    name: item.name || ("" + item.id),
+                    monitor: item.monitor || "",
+                    is_active: item.is_active || false,
+                    windows_count: item.windows_count || 0,
+                    preview: item.preview || ""
+                })
+            }
+        }
+    }
+
     function anyPanelWorkspaces() {
         return Object.keys(root.islandPanels).some(name => root.islandPanels[name].expanded && root.islandPanels[name].currentTab === 4)
     }
@@ -1284,7 +1331,10 @@ ShellRoot {
             onStreamFinished: {
                 try {
                     let d = JSON.parse(text.trim())
-                    if (d && d.workspaces) root.workspacesData = d
+                    if (d && d.workspaces) {
+                        root.workspacesData = d
+                        root.updateWorkspacesModel(d.workspaces)
+                    }
                 } catch(e) {}
             }
         }
@@ -7459,20 +7509,20 @@ Flickable {
                                 anchors.verticalCenter: parent.verticalCenter
 
                                 Repeater {
-                                    model: root.workspacesData?.workspaces || []
+                                    model: workspacesModel
 
                                     delegate: Rectangle {
                                         id: wsCard
-                                        readonly property int cardWsId: modelData.id
-                                        readonly property var cardClients: modelData.clients || []
+                                        readonly property int cardWsId: model.id
+                                        readonly property var cardClients: (root.workspacesData?.workspaces?.find(w => w.id === model.id)?.clients) || []
                                         width: 250
                                         height: 195
                                         radius: 14
                                         scale: cardHover.containsMouse ? 1.03 : 1.0
                                         Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                                         color: cardHover.containsMouse ? root.colSurfaceHover : root.colSurface
-                                        border.color: modelData.is_active ? root.colAccent : (cardHover.containsMouse ? Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.25) : root.colBorder)
-                                        border.width: modelData.is_active ? 2 : 1
+                                        border.color: model.is_active ? root.colAccent : (cardHover.containsMouse ? Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.25) : root.colBorder)
+                                        border.width: model.is_active ? 2 : 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
 
@@ -7501,12 +7551,12 @@ Flickable {
                                                     height: 20
                                                     implicitWidth: spaceBadgeText.implicitWidth + 12
                                                     radius: 10
-                                                    color: modelData.is_active ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.1)
+                                                    color: model.is_active ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.1)
                                                     Text {
                                                         id: spaceBadgeText
                                                         anchors.centerIn: parent
-                                                        text: "Space " + modelData.id
-                                                        color: modelData.is_active ? root.colBg : root.colFg
+                                                        text: "Space " + model.id
+                                                        color: model.is_active ? root.colBg : root.colFg
                                                         font.family: "JetBrainsMono Nerd Font"
                                                         font.pixelSize: 10
                                                         font.weight: Font.Bold
@@ -7514,7 +7564,7 @@ Flickable {
                                                 }
 
                                                 Text {
-                                                    text: modelData.monitor || ""
+                                                    text: model.monitor || ""
                                                     color: root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -7557,27 +7607,27 @@ Flickable {
                                                 radius: 8
                                                 clip: true
                                                 color: "#12131a"
-                                                border.color: modelData.is_active ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                                                border.color: model.is_active ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
                                                 border.width: 1
 
-                                                // 1. Placeholder underneath
+                                                // 1. Placeholder underneath (visible only if no windows or neither image loaded yet)
                                                 Item {
                                                     anchors.fill: parent
-                                                    visible: wsFullScreenImage.status !== Image.Ready || modelData.windows_count === 0
+                                                    visible: model.windows_count === 0 || (!imgA.isLoaded && !imgB.isLoaded)
 
                                                     ColumnLayout {
                                                         anchors.centerIn: parent
                                                         spacing: 4
 
                                                         Text {
-                                                            text: modelData.windows_count > 0 ? "󰍹" : "󰘔"
-                                                            color: modelData.is_active ? root.colAccent : root.colMuted
+                                                            text: model.windows_count > 0 ? "󰍹" : "󰘔"
+                                                            color: model.is_active ? root.colAccent : root.colMuted
                                                             font.family: "JetBrainsMono Nerd Font"
                                                             font.pixelSize: 20
                                                             Layout.alignment: Qt.AlignHCenter
                                                         }
                                                         Text {
-                                                            text: modelData.windows_count > 0 ? "Space " + modelData.id : "Empty Space"
+                                                            text: model.windows_count > 0 ? "Space " + model.id : "Empty Space"
                                                             color: root.colFg
                                                             font.family: "JetBrainsMono Nerd Font"
                                                             font.pixelSize: 10
@@ -7587,16 +7637,70 @@ Flickable {
                                                     }
                                                 }
 
-                                                // 2. Full Desktop Preview
-                                                Image {
-                                                    id: wsFullScreenImage
+                                                // 2. Full Desktop Preview - Zero Flicker Double Buffer
+                                                Item {
+                                                    id: previewContainer
                                                     anchors.fill: parent
-                                                    fillMode: Image.PreserveAspectFit
-                                                    smooth: true
-                                                    asynchronous: true
-                                                    cache: false
-                                                    source: (modelData.windows_count > 0 && modelData.preview) ? ("file://" + modelData.preview) : ""
-                                                    visible: (modelData.windows_count > 0 && modelData.preview !== "")
+                                                    visible: model.windows_count > 0 && model.preview !== ""
+
+                                                    property string currentUrl: model.preview
+                                                    onCurrentUrlChanged: {
+                                                        if (currentUrl === "") return
+                                                        let fileUrl = "file://" + currentUrl
+                                                        if (imgA.isFront) {
+                                                            imgB.source = fileUrl
+                                                        } else {
+                                                            imgA.source = fileUrl
+                                                        }
+                                                    }
+
+                                                    Component.onCompleted: {
+                                                        if (model.preview) {
+                                                            imgA.source = "file://" + model.preview
+                                                        }
+                                                    }
+
+                                                    Image {
+                                                        id: imgA
+                                                        anchors.fill: parent
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        asynchronous: true
+                                                        cache: false
+                                                        opacity: isFront ? 1.0 : 0.0
+                                                        property bool isFront: true
+                                                        property bool isLoaded: status === Image.Ready
+                                                        onStatusChanged: {
+                                                            if (status === Image.Ready) {
+                                                                isLoaded = true
+                                                                if (!isFront) {
+                                                                    isFront = true
+                                                                    imgB.isFront = false
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Image {
+                                                        id: imgB
+                                                        anchors.fill: parent
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        asynchronous: true
+                                                        cache: false
+                                                        opacity: isFront ? 1.0 : 0.0
+                                                        property bool isFront: false
+                                                        property bool isLoaded: status === Image.Ready
+                                                        onStatusChanged: {
+                                                            if (status === Image.Ready) {
+                                                                isLoaded = true
+                                                                if (!isFront) {
+                                                                    isFront = true
+                                                                    imgA.isFront = false
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
 
