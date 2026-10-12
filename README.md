@@ -22,6 +22,7 @@
 [![Rofi](https://img.shields.io/badge/Rofi-fab387?style=for-the-badge "Rofi")](https://github.com/lbonn/rofi)
 [![Pywal](https://img.shields.io/badge/Pywal-cba6f7?style=for-the-badge "Pywal")](https://github.com/dylanaraps/pywal)
 [![SDDM](https://img.shields.io/badge/SDDM-a6e3a1?style=for-the-badge "SDDM astronaut")](https://github.com/sddm/sddm)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white "Support on Ko-fi")](https://ko-fi.com/rhythmcreative)
 
 </div>
 
@@ -340,6 +341,18 @@ login by `rhythm-battery-limit.service`, because the kernel does not keep
 `charge_control_end_threshold` across reboots.
 
 </details>
+
+---
+
+## 💖 Support & Sponsor
+
+If you find this project useful and would like to support its development and maintenance:
+
+<p align="center">
+  <a href="https://ko-fi.com/rhythmcreative">
+    <img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="40" alt="Support on Ko-fi" />
+  </a>
+</p>
 
 ---
 
