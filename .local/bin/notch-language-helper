@@ -644,6 +644,16 @@ def main():
                 print(json.dumps(POPULAR_LOCALES))
         else:
             print(json.dumps(POPULAR_LOCALES))
+    elif cmd == "generate_all":
+        if HAVE_HYPRLAND_LANGUAGES:
+            try:
+                from hyprland_languages.locales import generate_all_locales
+                ok, msg = generate_all_locales()
+                print(json.dumps({"status": "ok" if ok else "error", "message": msg}))
+            except Exception as e:
+                print(json.dumps({"status": "error", "message": str(e)}))
+        else:
+            print(json.dumps({"status": "error", "message": "hyprland_languages not available"}))
     else:
         print(json.dumps({"status": "unknown_command"}))
 

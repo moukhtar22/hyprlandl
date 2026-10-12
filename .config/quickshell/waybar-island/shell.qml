@@ -106,71 +106,46 @@ ShellRoot {
 
     function toggleLanguageInput(screenName) {
         let panel = root.panelForScreen(screenName)
-        if (!panel) {
-            let names = Object.keys(root.islandPanels)
-            if (names.length) panel = root.islandPanels[names[0]]
-        }
-        if (!panel) return "unavailable"
-        root.islandVisible = true
-        if (screenName && screenName !== "all") {
-            let hs = Object.assign({}, root.hiddenScreens)
-            delete hs[screenName]
-            root.hiddenScreens = hs
-        }
-        if (panel.langInputExpanded) {
-            panel.langInputExpanded = false
+        if (panel && panel.expanded && panel.currentTab === 0 && panel.controlSubView === 8) {
+            root.setPanelState(screenName, false)
             return "collapsed"
-        } else {
-            panel.expanded = false
-            panel.sysMonExpanded = false
-            panel.langInputExpanded = true
-            langProc.running = true
-            return "opened"
         }
+        let p = root.setPanelState(screenName, true, 0, 8)
+        if (!p) return "unavailable"
+        langProc.running = true
+        fetchAllLocalesProc.running = true
+        fetchAllLayoutsProc.running = true
+        root.refreshAllStates()
+        return "opened"
     }
 
     function openLanguageInput(screenName) {
-        let panel = root.panelForScreen(screenName)
-        if (!panel) {
-            let names = Object.keys(root.islandPanels)
-            if (names.length) panel = root.islandPanels[names[0]]
-        }
-        if (!panel) return "unavailable"
-        panel.expanded = false
-        panel.sysMonExpanded = false
-        panel.langInputExpanded = true
-        panel.langInputSubView = 0
+        let p = root.setPanelState(screenName, true, 0, 8)
+        if (!p) return "unavailable"
         langProc.running = true
+        fetchAllLocalesProc.running = true
+        fetchAllLayoutsProc.running = true
+        root.refreshAllStates()
         return "opened"
     }
 
     function openLanguageLocales(screenName) {
-        let panel = root.panelForScreen(screenName)
-        if (!panel) {
-            let names = Object.keys(root.islandPanels)
-            if (names.length) panel = root.islandPanels[names[0]]
-        }
-        if (!panel) return "unavailable"
-        panel.expanded = false
-        panel.sysMonExpanded = false
-        panel.langInputExpanded = true
-        panel.langInputSubView = 2
+        let p = root.setPanelState(screenName, true, 0, 8)
+        if (!p) return "unavailable"
+        p.langSubTab = 1
         langProc.running = true
+        fetchAllLocalesProc.running = true
+        root.refreshAllStates()
         return "opened"
     }
 
     function openLanguageLayouts(screenName) {
-        let panel = root.panelForScreen(screenName)
-        if (!panel) {
-            let names = Object.keys(root.islandPanels)
-            if (names.length) panel = root.islandPanels[names[0]]
-        }
-        if (!panel) return "unavailable"
-        panel.expanded = false
-        panel.sysMonExpanded = false
-        panel.langInputExpanded = true
-        panel.langInputSubView = 1
+        let p = root.setPanelState(screenName, true, 0, 8)
+        if (!p) return "unavailable"
+        p.langSubTab = 0
         langProc.running = true
+        fetchAllLayoutsProc.running = true
+        root.refreshAllStates()
         return "opened"
     }
 
@@ -825,7 +800,10 @@ ShellRoot {
         }
         function closeLanguageInput(screenName: string): string {
             let panel = root.panelForScreen(screenName)
-            if (panel) panel.langInputExpanded = false
+            if (panel) {
+                panel.langInputExpanded = false
+                if (panel.controlSubView === 8) panel.controlSubView = 0
+            }
             return "collapsed"
         }
         function reloadLanguage(screenName: string): string {
@@ -7583,6 +7561,52 @@ ShellRoot {
     property var allLocalesList: []
     property var allLayoutsList: []
 
+    readonly property var popularLayoutsList: [
+        { code: "us", label: "English (US)", flag: "🇺🇸" },
+        { code: "es", label: "Spanish (Spain)", flag: "🇪🇸" },
+        { code: "latam", label: "Spanish (Latin America)", flag: "🇲🇽" },
+        { code: "gb", label: "English (UK)", flag: "🇬🇧" },
+        { code: "de", label: "German", flag: "🇩🇪" },
+        { code: "fr", label: "French", flag: "🇫🇷" },
+        { code: "it", label: "Italian", flag: "🇮🇹" },
+        { code: "pt", label: "Portuguese (Portugal)", flag: "🇵🇹" },
+        { code: "br", label: "Portuguese (Brazil)", flag: "🇧🇷" },
+        { code: "ru", label: "Russian", flag: "🇷🇺" },
+        { code: "jp", label: "Japanese", flag: "🇯🇵" },
+        { code: "kr", label: "Korean", flag: "🇰🇷" },
+        { code: "cn", label: "Chinese", flag: "🇨🇳" },
+        { code: "ara", label: "Arabic", flag: "🇸🇦" },
+        { code: "tr", label: "Turkish", flag: "🇹🇷" },
+        { code: "pl", label: "Polish", flag: "🇵🇱" },
+        { code: "nl", label: "Dutch", flag: "🇳🇱" },
+        { code: "se", label: "Swedish", flag: "🇸🇪" },
+        { code: "no", label: "Norwegian", flag: "🇳🇴" },
+        { code: "dk", label: "Danish", flag: "🇩🇰" },
+        { code: "fi", label: "Finnish", flag: "🇫🇮" },
+        { code: "gr", label: "Greek", flag: "🇬🇷" },
+        { code: "ua", label: "Ukrainian", flag: "🇺🇦" },
+        { code: "cz", label: "Czech", flag: "🇨🇿" },
+        { code: "ro", label: "Romanian", flag: "🇷🇴" },
+        { code: "hu", label: "Hungarian", flag: "🇭🇺" }
+    ]
+
+    readonly property var popularLocalesList: [
+        { locale: "en_US.UTF-8", label: "English (United States)", flag: "🇺🇸" },
+        { locale: "es_ES.UTF-8", label: "Español (España)", flag: "🇪🇸" },
+        { locale: "es_MX.UTF-8", label: "Español (México)", flag: "🇲🇽" },
+        { locale: "en_GB.UTF-8", label: "English (United Kingdom)", flag: "🇬🇧" },
+        { locale: "fr_FR.UTF-8", label: "Français (France)", flag: "🇫🇷" },
+        { locale: "de_DE.UTF-8", label: "Deutsch (Deutschland)", flag: "🇩🇪" },
+        { locale: "it_IT.UTF-8", label: "Italiano (Italia)", flag: "🇮🇹" },
+        { locale: "pt_BR.UTF-8", label: "Português (Brasil)", flag: "🇧🇷" },
+        { locale: "pt_PT.UTF-8", label: "Português (Portugal)", flag: "🇵🇹" },
+        { locale: "ru_RU.UTF-8", label: "Русский (Россия)", flag: "🇷🇺" },
+        { locale: "ja_JP.UTF-8", label: "日本語 (日本)", flag: "🇯🇵" },
+        { locale: "zh_CN.UTF-8", label: "中文 (简体)", flag: "🇨🇳" },
+        { locale: "ko_KR.UTF-8", label: "한국어 (대한민국)", flag: "🇰🇷" },
+        { locale: "C.UTF-8", label: "English (Portable Unicode)", flag: "🌐" }
+    ]
+
     FileView {
         id: allLocalesFile
         path: Quickshell.env("HOME") + "/.config/quickshell/waybar-island/all_locales.json"
@@ -8259,6 +8283,10 @@ ShellRoot {
             property string sysMonProcTab: "cpu"
             property int currentTab: 0
             property int controlSubView: 0
+            property int langSubTab: 0
+            property string langLayoutSearch: ""
+            property string langLocaleSearch: ""
+            property int langLocaleTarget: 0
             property real tabFade: 1.0
             property string selectedWifiSsid: ""
             property string wifiConnectState: "idle"
@@ -8331,6 +8359,11 @@ ShellRoot {
                     otaChangelogProc.running = true
                 }
                 if (islandWin.controlSubView === 5) nightLightSettingsProc.running = true
+                if (islandWin.controlSubView === 8) {
+                    langProc.running = true
+                    fetchAllLocalesProc.running = true
+                    fetchAllLayoutsProc.running = true
+                }
             }
 
             Timer { id: tabFadeReset; interval: 40; repeat: false; onTriggered: islandWin.tabFade = 1.0 }
@@ -12390,7 +12423,18 @@ ShellRoot {
                                     Text { text: "󰌌"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
                                     Text { text: root.kbLayout; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { root.runCmd("~/.local/bin/toggle-keyboard-layout"); kbProc.running = true; } }
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: mouse => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            root.runCmd("~/.local/bin/toggle-keyboard-layout")
+                                            kbProc.running = true
+                                        } else {
+                                            islandWin.controlSubView = 8
+                                        }
+                                    }
+                                }
                             }
 
                             Rectangle {
@@ -16377,6 +16421,874 @@ Flickable {
                                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                     enabled: !root.otaUpdating
                                     onClicked: { root.otaUpdating = true; otaUpdateProc.running = true }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── 8. SUBSECCIÓN: IDIOMA Y ENTRADA / LANGUAGE & KEYBOARDS (CONTROL) ──
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        visible: islandWin.controlSubView === 8
+
+                        // 1. Cabecera con botón de retorno y título
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Rectangle {
+                                width: 100
+                                height: 32
+                                radius: 16
+                                color: root.colSurface
+                                border.color: root.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Text {
+                                        text: "󰁍"
+                                        color: root.colAccent
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 14
+                                    }
+                                    Text {
+                                        text: root.t("btn_back", "Back")
+                                        color: root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: islandWin.controlSubView = 0
+                                }
+                            }
+
+                            Text {
+                                text: root.t("lang_title_main", "Idioma y Teclado")
+                                color: root.colFg
+                                font.family: "JetBrainsMono Nerd Font"
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Rectangle {
+                                width: 32
+                                height: 32
+                                radius: 16
+                                color: Qt.rgba(255, 255, 255, 0.08)
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "󰑐"
+                                    color: root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 14
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        langProc.running = true
+                                        fetchAllLocalesProc.running = true
+                                        fetchAllLayoutsProc.running = true
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Selector de pestaña interna: [ 󰌌 Distribución de Teclado ] [ 󰗊 Idioma de Interfaz ]
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 34
+                                radius: 17
+                                color: islandWin.langSubTab === 0 ? root.colAccent : root.colSurface
+                                border.color: islandWin.langSubTab === 0 ? root.colAccent : root.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Text {
+                                        text: "󰌌"
+                                        color: islandWin.langSubTab === 0 ? root.colBg : root.colAccent
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
+                                    Text {
+                                        text: root.t("lang_tab_keyboards", "Distribución de Teclado")
+                                        color: islandWin.langSubTab === 0 ? root.colBg : root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: islandWin.langSubTab = 0
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 34
+                                radius: 17
+                                color: islandWin.langSubTab === 1 ? root.colAccent : root.colSurface
+                                border.color: islandWin.langSubTab === 1 ? root.colAccent : root.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Text {
+                                        text: "󰗊"
+                                        color: islandWin.langSubTab === 1 ? root.colBg : root.colAccent
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
+                                    Text {
+                                        text: root.t("lang_tab_display", "Idioma de Interfaz")
+                                        color: islandWin.langSubTab === 1 ? root.colBg : root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: islandWin.langSubTab = 1
+                                }
+                            }
+                        }
+
+                        // ── PESTAÑA 0: DISTRIBUCIÓN DE TECLADO ──
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            visible: islandWin.langSubTab === 0
+
+                            // Atajo de cambio de teclado
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Text {
+                                    text: root.t("lang_hotkey_label", "Atajo alternar:")
+                                    color: root.colMuted
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                                Repeater {
+                                    model: [
+                                        { label: "Win+Space", opt: "grp:win_space_toggle" },
+                                        { label: "Alt+Shift", opt: "grp:alt_shift_toggle" },
+                                        { label: "Ctrl+Shift", opt: "grp:ctrl_shift_toggle" },
+                                        { label: "Caps Lock", opt: "grp:caps_toggle" },
+                                        { label: "None", opt: "" }
+                                    ]
+                                    delegate: Rectangle {
+                                        readonly property bool isSelected: (root.langData?.hotkey_option || "") === modelData.opt
+                                        height: 24
+                                        implicitWidth: hkTxt.implicitWidth + 14
+                                        radius: 12
+                                        color: isSelected ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : root.colSurface
+                                        border.color: isSelected ? root.colAccent : root.colBorder
+                                        border.width: 1
+
+                                        Text {
+                                            id: hkTxt
+                                            anchors.centerIn: parent
+                                            text: modelData.label
+                                            color: isSelected ? root.colAccent : root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 9
+                                            font.weight: isSelected ? Font.Bold : Font.Normal
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/notch-language-helper set_hotkey '" + modelData.opt + "'")
+                                                langRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Distribuciones actualmente activas
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Text {
+                                    text: root.t("lang_active_list", "Distribuciones activas:")
+                                    color: root.colMuted
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                                Repeater {
+                                    model: root.langData?.layouts || []
+                                    delegate: Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 34
+                                        radius: 8
+                                        color: modelData.active ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : root.colSurface
+                                        border.color: modelData.active ? root.colAccent : "transparent"
+                                        border.width: 1
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/notch-language-helper switch " + modelData.id)
+                                                langRefreshTimer.restart()
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 10
+                                            anchors.rightMargin: 10
+                                            spacing: 8
+
+                                            Text {
+                                                text: (index + 1) + "."
+                                                color: modelData.active ? root.colAccent : root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Bold
+                                            }
+
+                                            Rectangle {
+                                                height: 18
+                                                implicitWidth: 36
+                                                radius: 4
+                                                color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2)
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: (modelData.code || "").toUpperCase()
+                                                    color: root.colAccent
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Text {
+                                                text: modelData.label || modelData.code
+                                                color: root.colFg
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                                font.weight: modelData.active ? Font.Bold : Font.Normal
+                                                Layout.fillWidth: true
+                                            }
+
+                                            Rectangle {
+                                                visible: modelData.active
+                                                height: 18
+                                                implicitWidth: 46
+                                                radius: 9
+                                                color: root.colAccent
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: root.t("lang_active", "Activo")
+                                                    color: root.colBg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: (root.langData?.layouts?.length || 1) > 1
+                                                width: 22
+                                                height: 22
+                                                radius: 11
+                                                color: delLayHover.containsMouse ? "#ff5555" : "transparent"
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "󰅖"
+                                                    color: delLayHover.containsMouse ? "#ffffff" : root.colMuted
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 11
+                                                }
+                                                MouseArea {
+                                                    id: delLayHover
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.runCmd("$HOME/.local/bin/notch-language-helper remove " + modelData.code)
+                                                        langRefreshTimer.restart()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Buscador de distribuciones
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 34
+                                radius: 8
+                                color: root.colSurface
+                                border.color: laySearchInput.activeFocus ? root.colAccent : root.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Text {
+                                        text: "󰍉"
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
+
+                                    TextInput {
+                                        id: laySearchInput
+                                        Layout.fillWidth: true
+                                        text: islandWin.langLayoutSearch
+                                        color: root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        clip: true
+                                        onTextChanged: islandWin.langLayoutSearch = text
+
+                                        Text {
+                                            visible: !laySearchInput.text && !laySearchInput.activeFocus
+                                            text: root.t("lang_search_layout", "Buscar entre 99 distribuciones (us, es, de, fr, jp, latam...)...")
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 10
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: !!laySearchInput.text
+                                        text: "󰅖"
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: laySearchInput.text = ""
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Chips rápidos de layouts populares
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Repeater {
+                                    model: [
+                                        { code: "us", label: "US" },
+                                        { code: "es", label: "ES (España)" },
+                                        { code: "latam", label: "LatAm" },
+                                        { code: "gb", label: "UK" },
+                                        { code: "de", label: "DE" },
+                                        { code: "fr", label: "FR" },
+                                        { code: "it", label: "IT" },
+                                        { code: "pt", label: "PT" },
+                                        { code: "br", label: "BR" },
+                                        { code: "ru", label: "RU" },
+                                        { code: "jp", label: "JP" },
+                                        { code: "kr", label: "KR" },
+                                        { code: "ara", label: "AR" },
+                                        { code: "tr", label: "TR" },
+                                        { code: "pl", label: "PL" }
+                                    ]
+                                    delegate: Rectangle {
+                                        readonly property bool isAdded: (root.langData?.layouts || []).some(l => l.code === modelData.code)
+                                        height: 22
+                                        implicitWidth: chipTxt.implicitWidth + 12
+                                        radius: 6
+                                        color: isAdded ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : root.colSurface
+                                        border.color: isAdded ? root.colAccent : root.colBorder
+                                        border.width: 1
+
+                                        Text {
+                                            id: chipTxt
+                                            anchors.centerIn: parent
+                                            text: (isAdded ? "✓ " : "+ ") + modelData.label
+                                            color: isAdded ? root.colAccent : root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 9
+                                            font.weight: isAdded ? Font.Bold : Font.Normal
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (isAdded) {
+                                                    root.runCmd("$HOME/.local/bin/notch-language-helper switch " + modelData.code)
+                                                } else {
+                                                    root.runCmd("$HOME/.local/bin/notch-language-helper add " + modelData.code)
+                                                }
+                                                langRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Lista scrolleable completa de todas las distribuciones
+                            Flickable {
+                                id: allLaysFlick
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 210
+                                contentWidth: width
+                                contentHeight: allLaysCol.implicitHeight
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                WheelHandler {
+                                    target: allLaysFlick
+                                }
+
+                                ColumnLayout {
+                                    id: allLaysCol
+                                    width: parent.width
+                                    spacing: 4
+
+                                    readonly property var filtered: {
+                                        let q = (islandWin.langLayoutSearch || "").toLowerCase().trim()
+                                        let list = (root.allLayoutsList && root.allLayoutsList.length > 0) ? root.allLayoutsList : root.popularLayoutsList
+                                        return list.filter(l => !q || (l.label && l.label.toLowerCase().includes(q)) || (l.code && l.code.toLowerCase().includes(q))).slice(0, 80)
+                                    }
+
+                                    Repeater {
+                                        model: allLaysCol.filtered
+                                        delegate: Rectangle {
+                                            readonly property bool isAdded: (root.langData?.layouts || []).some(l => l.code === modelData.code)
+                                            Layout.fillWidth: true
+                                            height: 32
+                                            radius: 6
+                                            color: isAdded ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15) : (layRowHover.containsMouse ? root.colSurfaceHover : root.colSurface)
+                                            border.color: isAdded ? root.colAccent : "transparent"
+                                            border.width: 1
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                spacing: 8
+
+                                                Text { text: modelData.flag || "⌨️"; font.pixelSize: 12 }
+
+                                                Rectangle {
+                                                    height: 18
+                                                    implicitWidth: 36
+                                                    radius: 4
+                                                    color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.18)
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: (modelData.code || "").toUpperCase()
+                                                        color: root.colAccent
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 8
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: modelData.label || modelData.code
+                                                    color: root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    text: isAdded ? root.t("lang_active", "Activo") : root.t("lang_add_btn", "+ Añadir")
+                                                    color: isAdded ? root.colAccent : (layRowHover.containsMouse ? root.colAccent : root.colMuted)
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: layRowHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (isAdded) {
+                                                        root.runCmd("$HOME/.local/bin/notch-language-helper switch " + modelData.code)
+                                                    } else {
+                                                        root.runCmd("$HOME/.local/bin/notch-language-helper add " + modelData.code)
+                                                    }
+                                                    langRefreshTimer.restart()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── PESTAÑA 1: IDIOMA DEL SISTEMA E INTERFAZ ──
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            visible: islandWin.langSubTab === 1
+
+                            // Tarjeta de idioma activo actual
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 42
+                                radius: 8
+                                color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15)
+                                border.color: root.colAccent
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Text {
+                                        text: "󰗊"
+                                        color: root.colAccent
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 16
+                                    }
+
+                                    ColumnLayout {
+                                        spacing: 1
+                                        Layout.fillWidth: true
+
+                                        Text {
+                                            text: root.langData?.user_locale_label || root.langData?.user_locale || "es_ES.UTF-8"
+                                            color: root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 11
+                                            font.weight: Font.Bold
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            text: "LANG=" + (root.langData?.user_locale || "es_ES.UTF-8")
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 9
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        height: 18
+                                        implicitWidth: 46
+                                        radius: 9
+                                        color: root.colAccent
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.t("lang_active", "Activo")
+                                            color: root.colBg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 9
+                                            font.weight: Font.Bold
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 10 Idiomas principales rápidos
+                            GridLayout {
+                                Layout.fillWidth: true
+                                columns: 5
+                                rowSpacing: 4
+                                columnSpacing: 4
+
+                                Repeater {
+                                    model: [
+                                        { locale: "es_ES.UTF-8", code: "es", label: "Español", flag: "🇪🇸" },
+                                        { locale: "en_US.UTF-8", code: "en", label: "English", flag: "🇬🇧" },
+                                        { locale: "fr_FR.UTF-8", code: "fr", label: "Français", flag: "🇫🇷" },
+                                        { locale: "de_DE.UTF-8", code: "de", label: "Deutsch", flag: "🇩🇪" },
+                                        { locale: "it_IT.UTF-8", code: "it", label: "Italiano", flag: "🇮🇹" },
+                                        { locale: "pt_PT.UTF-8", code: "pt", label: "Português", flag: "🇵🇹" },
+                                        { locale: "ru_RU.UTF-8", code: "ru", label: "Русский", flag: "🇷🇺" },
+                                        { locale: "ja_JP.UTF-8", code: "ja", label: "日本語", flag: "🇯🇵" },
+                                        { locale: "zh_CN.UTF-8", code: "zh", label: "中文", flag: "🇨🇳" },
+                                        { locale: "ko_KR.UTF-8", code: "ko", label: "한국어", flag: "🇰🇷" }
+                                    ]
+
+                                    delegate: Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 26
+                                        radius: 6
+                                        readonly property bool isCur: {
+                                            let cur = (root.langData?.user_locale || "").toLowerCase()
+                                            return cur.startsWith(modelData.code) || cur === modelData.locale.toLowerCase()
+                                        }
+                                        color: isCur ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : root.colSurface
+                                        border.color: isCur ? root.colAccent : root.colBorder
+                                        border.width: 1
+
+                                        RowLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 4
+                                            Text { text: modelData.flag; font.pixelSize: 10 }
+                                            Text {
+                                                text: modelData.label
+                                                color: isCur ? root.colAccent : root.colFg
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 9
+                                                font.weight: isCur ? Font.Bold : Font.Normal
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (islandWin.langLocaleTarget === 1) {
+                                                    root.runCmd("$HOME/.local/bin/notch-language-helper set_system_locale '" + modelData.locale + "'")
+                                                } else {
+                                                    root.runCmd("$HOME/.local/bin/notch-language-helper set_user_locale '" + modelData.locale + "'")
+                                                }
+                                                langRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Selector de destino (Usuario vs Sistema global localectl)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Text {
+                                    text: "Aplicar en:"
+                                    color: root.colMuted
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                }
+
+                                Rectangle {
+                                    height: 22
+                                    implicitWidth: userTgtTxt.implicitWidth + 12
+                                    radius: 6
+                                    color: islandWin.langLocaleTarget === 0 ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : root.colSurface
+                                    border.color: islandWin.langLocaleTarget === 0 ? root.colAccent : root.colBorder
+                                    border.width: 1
+
+                                    Text {
+                                        id: userTgtTxt
+                                        anchors.centerIn: parent
+                                        text: "Usuario (Interfaz / Sesión)"
+                                        color: islandWin.langLocaleTarget === 0 ? root.colAccent : root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 9
+                                        font.weight: islandWin.langLocaleTarget === 0 ? Font.Bold : Font.Normal
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: islandWin.langLocaleTarget = 0
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 22
+                                    implicitWidth: sysTgtTxt.implicitWidth + 12
+                                    radius: 6
+                                    color: islandWin.langLocaleTarget === 1 ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : root.colSurface
+                                    border.color: islandWin.langLocaleTarget === 1 ? root.colAccent : root.colBorder
+                                    border.width: 1
+
+                                    Text {
+                                        id: sysTgtTxt
+                                        anchors.centerIn: parent
+                                        text: "Sistema global (localectl)"
+                                        color: islandWin.langLocaleTarget === 1 ? root.colAccent : root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 9
+                                        font.weight: islandWin.langLocaleTarget === 1 ? Font.Bold : Font.Normal
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: islandWin.langLocaleTarget = 1
+                                    }
+                                }
+                            }
+
+                            // Buscador de locales de sistema
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 34
+                                radius: 8
+                                color: root.colSurface
+                                border.color: locSearchInput.activeFocus ? root.colAccent : root.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Text {
+                                        text: "󰍉"
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
+
+                                    TextInput {
+                                        id: locSearchInput
+                                        Layout.fillWidth: true
+                                        text: islandWin.langLocaleSearch
+                                        color: root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        clip: true
+                                        onTextChanged: islandWin.langLocaleSearch = text
+
+                                        Text {
+                                            visible: !locSearchInput.text && !locSearchInput.activeFocus
+                                            text: root.t("lang_search_locale", "Buscar entre 328 idiomas de /etc/locale.gen...")
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 10
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: !!locSearchInput.text
+                                        text: "󰅖"
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: locSearchInput.text = ""
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Lista scrolleable completa de todos los locales
+                            Flickable {
+                                id: allLocsFlick
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 200
+                                contentWidth: width
+                                contentHeight: allLocsCol.implicitHeight
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                WheelHandler {
+                                    target: allLocsFlick
+                                }
+
+                                ColumnLayout {
+                                    id: allLocsCol
+                                    width: parent.width
+                                    spacing: 4
+
+                                    readonly property var filtered: {
+                                        let q = (islandWin.langLocaleSearch || "").toLowerCase().trim()
+                                        let list = (root.allLocalesList && root.allLocalesList.length > 0) ? root.allLocalesList : root.popularLocalesList
+                                        return list.filter(l => !q || (l.label && l.label.toLowerCase().includes(q)) || (l.locale && l.locale.toLowerCase().includes(q))).slice(0, 80)
+                                    }
+
+                                    Repeater {
+                                        model: allLocsCol.filtered
+                                        delegate: Rectangle {
+                                            readonly property bool isCur: {
+                                                let cur = (root.langData?.user_locale || "").toLowerCase()
+                                                return cur === (modelData.locale || "").toLowerCase()
+                                            }
+                                            Layout.fillWidth: true
+                                            height: 32
+                                            radius: 6
+                                            color: isCur ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15) : (locRowHover.containsMouse ? root.colSurfaceHover : root.colSurface)
+                                            border.color: isCur ? root.colAccent : "transparent"
+                                            border.width: 1
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                spacing: 8
+
+                                                Text { text: modelData.flag || "󰗊"; font.pixelSize: 12 }
+
+                                                Text {
+                                                    text: modelData.label || modelData.locale
+                                                    color: root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    text: modelData.locale || ""
+                                                    color: root.colMuted
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 9
+                                                }
+
+                                                Text {
+                                                    text: isCur ? root.t("lang_active", "Activo") : root.t("lang_select_btn", "Seleccionar")
+                                                    color: isCur ? root.colAccent : (locRowHover.containsMouse ? root.colAccent : root.colMuted)
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: locRowHover
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (islandWin.langLocaleTarget === 1) {
+                                                        root.runCmd("$HOME/.local/bin/notch-language-helper set_system_locale '" + modelData.locale + "'")
+                                                    } else {
+                                                        root.runCmd("$HOME/.local/bin/notch-language-helper set_user_locale '" + modelData.locale + "'")
+                                                    }
+                                                    langRefreshTimer.restart()
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
