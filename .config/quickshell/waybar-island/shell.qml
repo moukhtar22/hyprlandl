@@ -1640,26 +1640,29 @@ ShellRoot {
         }
 
         // Corner Dynamic Island: Real-Time System Monitor (htop style)
-        Rectangle {
+        Item {
             id: sysMonCapsule
             anchors.top: parent.top
-            anchors.topMargin: 38
             anchors.left: parent.left
-            anchors.leftMargin: 12
-            width: 580
-            height: 640
-            radius: 20
-            color: root.colBg
-            border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
-            border.width: 1
+            width: 600
+            height: islandWin.sysMonExpanded ? 670 : 0
             clip: true
 
             opacity: islandWin.sysMonExpanded ? 1.0 : 0.0
-            scale: islandWin.sysMonExpanded ? 1.0 : 0.94
             visible: opacity > 0
 
+            Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
             Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+            // Apple Dynamic Island corner silhouette fused to top-left screen edge
+            SiluetaEsquina {
+                anchors.fill: parent
+                ala: 18
+                cuerpoRadio: 24
+                relleno: root.colBg
+                bordeColor: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.14)
+                bordeAncho: 1
+            }
 
             // Intercept clicks inside the capsule so they do not hit cazaClics
             MouseArea {
@@ -1668,7 +1671,10 @@ ShellRoot {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 16
+                anchors.topMargin: 12
+                anchors.leftMargin: 14
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 14
                 spacing: 10
 
                 // 1. Header (Icon, Title, Subtitle, htop button, Refresh, Close)
@@ -2303,7 +2309,7 @@ ShellRoot {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: "ESC o clic fuera para cerrar"
+                        text: "ESC or click outside to close"
                         color: Qt.rgba(root.colMuted.r, root.colMuted.g, root.colMuted.b, 0.6)
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 8
