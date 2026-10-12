@@ -73,7 +73,7 @@ PanelWindow {
     // --- Dynamic Stats State ---
     property var rawWorkspaces: []
     property int activeWsId: 1
-    property string activeKeymap: "US"
+    property string activeKeymap: (islandRoot && islandRoot.kbLayout) ? islandRoot.kbLayout : "US"
 
     // System stats
     property int cpuPercent: 5
@@ -155,7 +155,7 @@ PanelWindow {
     // 1. Workspaces (Per-monitor active workspace) & Keymap
     Process {
         id: wsProc
-        command: ["bash", "-c", "hyprctl -j monitors 2>/dev/null; echo '==='; hyprctl -j workspaces 2>/dev/null; echo '==='; hyprctl devices -j 2>/dev/null | jq -r '.keyboards[] | select(.main == true) | .active_keymap' 2>/dev/null"]
+        command: ["bash", "-c", "hyprctl -j monitors 2>/dev/null; echo '==='; hyprctl -j workspaces 2>/dev/null; echo '==='; $HOME/.local/bin/kb-layout 2>/dev/null || echo 'US'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -173,8 +173,11 @@ PanelWindow {
                         }
 
                         const km = parts[2].trim()
-                        if (km.includes("Spanish") || km.includes("es") || km.includes("ES")) barWin.activeKeymap = "ES"
-                        else barWin.activeKeymap = "US"
+                        if (km.length > 0 && km !== "null") {
+                            barWin.activeKeymap = km.toUpperCase()
+                        } else if (barWin.islandRoot && barWin.islandRoot.kbLayout) {
+                            barWin.activeKeymap = barWin.islandRoot.kbLayout
+                        }
                     }
                 } catch(e) {}
             }
