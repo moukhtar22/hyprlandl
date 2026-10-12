@@ -39,7 +39,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [backend] $1" >> "$LOG_FILE"; }
 # varias instancias el mas reciente es el vivo.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [ -z "${WAYLAND_DISPLAY:-}" ]; then
-    _wl=$(ls -t "$XDG_RUNTIME_DIR"/wayland-[0-9]* 2>/dev/null | grep -v '\.lock$' | grep -v 'awww-daemon' | head -n1)
+    _wl=$(ls -t "$XDG_RUNTIME_DIR"/wayland-[0-9]* 2>/dev/null | grep -v '\.lock$' | grep -v 'awww' | head -n1)
     if [ -n "$_wl" ]; then export WAYLAND_DISPLAY="$(basename "$_wl")"; fi
     unset _wl
 fi
@@ -75,7 +75,10 @@ monitors() {
 
 ensure_daemon() {
     if command -v awww >/dev/null 2>&1; then
-        if ! pgrep -x "awww-daemon" >/dev/null 2>&1 && ! awww query >/dev/null 2>&1; then
+        if ! awww query >/dev/null 2>&1; then
+            pkill -x "awww-daemon" 2>/dev/null || true
+            sleep 0.1
+            rm -f "$XDG_RUNTIME_DIR"/*awww-daemon.sock 2>/dev/null || true
             setsid awww-daemon --format xrgb --no-cache >/dev/null 2>&1 &
             for _ in $(seq 1 50); do
                 awww query >/dev/null 2>&1 && break
@@ -83,7 +86,9 @@ ensure_daemon() {
             done
         fi
     elif command -v swww >/dev/null 2>&1; then
-        if ! pgrep -x "swww-daemon" >/dev/null 2>&1 && ! swww query >/dev/null 2>&1; then
+        if ! swww query >/dev/null 2>&1; then
+            pkill -x "swww-daemon" 2>/dev/null || true
+            sleep 0.1
             setsid swww-daemon --format xrgb --no-cache >/dev/null 2>&1 &
             for _ in $(seq 1 50); do
                 swww query >/dev/null 2>&1 && break
