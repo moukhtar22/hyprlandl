@@ -2689,7 +2689,7 @@ ShellRoot {
             id: langInputPanel
             anchors.centerIn: parent
             width: 540
-            height: Math.min(modelData.height - 80, Math.max(480, langInputCol.implicitHeight + 44))
+            height: Math.min(modelData.height - 80, langInputCol.implicitHeight + 44)
             radius: 16
             color: root.colBg
             border.color: root.colAccent
@@ -2969,125 +2969,7 @@ ShellRoot {
                         color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
                     }
 
-                    // 3. Input Switching Section
-                    Text {
-                        text: "Input Switching"
-                        color: root.colMuted
-                        font.family: "JetBrainsMono Nerd Font"
-                        font.pixelSize: 11
-                        font.weight: Font.Bold
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Text {
-                            text: "Current Hotkey:"
-                            color: root.colFg
-                            font.family: "JetBrainsMono Nerd Font"
-                            font.pixelSize: 11
-                        }
-
-                        RowLayout {
-                            spacing: 4
-                            visible: (root.langData.current_hotkey_keys?.length || 0) > 0
-
-                            Repeater {
-                                model: root.langData.current_hotkey_keys || []
-                                delegate: RowLayout {
-                                    spacing: 4
-                                    Rectangle {
-                                        height: 24
-                                        implicitWidth: keycapText.implicitWidth + 14
-                                        radius: 5
-                                        color: "#181a24"
-                                        border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.25)
-                                        border.width: 1
-                                        Text {
-                                            id: keycapText
-                                            anchors.centerIn: parent
-                                            text: modelData
-                                            color: root.colFg
-                                            font.family: "JetBrainsMono Nerd Font"
-                                            font.pixelSize: 10
-                                            font.weight: Font.Bold
-                                        }
-                                    }
-                                    Text {
-                                        visible: index < (root.langData.current_hotkey_keys.length - 1)
-                                        text: "+"
-                                        color: root.colMuted
-                                        font.family: "JetBrainsMono Nerd Font"
-                                        font.pixelSize: 10
-                                    }
-                                }
-                            }
-                        }
-
-                        Text {
-                            visible: (!root.langData.current_hotkey_keys || root.langData.current_hotkey_keys.length === 0)
-                            text: "None"
-                            color: root.colMuted
-                            font.family: "JetBrainsMono Nerd Font"
-                            font.pixelSize: 11
-                            font.italic: true
-                        }
-                    }
-
-                    // Quick Hotkey Selector Chips
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        Repeater {
-                            model: [
-                                { label: "Alt + Shift", opt: "grp:alt_shift_toggle" },
-                                { label: "Super + Space", opt: "grp:win_space_toggle" },
-                                { label: "Ctrl + Shift", opt: "grp:ctrl_shift_toggle" },
-                                { label: "Caps Lock", opt: "grp:caps_toggle" },
-                                { label: "None", opt: "" }
-                            ]
-                            delegate: Rectangle {
-                                height: 26
-                                implicitWidth: hotkeyLabelText.implicitWidth + 14
-                                radius: 13
-                                color: (root.langData.hotkey_option === modelData.opt) ? root.colAccent : (hkHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08))
-                                border.color: (root.langData.hotkey_option === modelData.opt) ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.15)
-                                border.width: 1
-
-                                Text {
-                                    id: hotkeyLabelText
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: (root.langData.hotkey_option === modelData.opt) ? root.colBg : root.colFg
-                                    font.family: "JetBrainsMono Nerd Font"
-                                    font.pixelSize: 9
-                                    font.weight: Font.Bold
-                                }
-
-                                MouseArea {
-                                    id: hkHover
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        root.runCmd("$HOME/.local/bin/notch-language-helper set_hotkey '" + modelData.opt + "'")
-                                        langRefreshTimer.restart()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Divider
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 1
-                        color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
-                    }
-
-                    // 4. System Language Section
+                    // 3. System Language Section
                     Text {
                         text: "System Language"
                         color: root.colMuted
