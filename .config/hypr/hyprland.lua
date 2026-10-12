@@ -47,7 +47,13 @@ local background = "rgb(101012)"
 --
 -- OJO: en esta versión los comodines en `output` no coinciden (`eDP-*` no hace
 -- nada), así que el panel interno va por su nombre exacto. Por lo mismo
--- `output = ""` no actúa de regla general.
+-- Regla general por defecto para cualquier monitor (laptop, desktop, VM)
+hl.monitor({
+    output   = "",
+    mode     = "preferred",
+    position = "auto",
+    scale    = "auto",
+})
 hl.monitor({
     output   = "eDP-1",
     mode     = "preferred",
@@ -95,71 +101,76 @@ local function aplicar_monitors_nwg()
                 local resto = limpio:match("^monitor%s*=%s*(.+)$")
                 if resto then
                     local partes = {}
-                    for p in resto:gmatch("[^,]+") do
+                    for p in (resto .. ","):gmatch("(.-),") do
                         local t = p:gsub("^%s+", ""):gsub("%s+$", "")
-                        if t ~= "" then table.insert(partes, t) end
+                        table.insert(partes, t)
                     end
 
-                    local salida = partes[1]
-                    if salida and salida ~= "" then
-                        if not monitores[salida] then
-                            monitores[salida] = { output = salida }
-                            table.insert(orden, salida)
+                    local salida = partes[1] or ""
+                    local idx = 2
+
+                    -- Si la línea empezó sin nombre de monitor (ej. monitor=,preferred,auto,1 o monitor=preferred,auto,1)
+                    if salida:lower() == "preferred" or salida:lower() == "highres" or salida:lower() == "highrr" or salida:match("^%d+x%d+") then
+                        idx = 1
+                        salida = ""
+                    end
+
+                    if not monitores[salida] then
+                        monitores[salida] = { output = salida }
+                        table.insert(orden, salida)
+                    end
+                    local m = monitores[salida]
+
+                    if partes[idx] and partes[idx]:lower() == "disable" then
+                        m.disabled = true
+                        m.mode = "disable"
+                    elseif partes[idx] and partes[idx]:lower() == "transform" and partes[idx + 1] then
+                        local t = tonumber(partes[idx + 1])
+                        if t and t >= 0 and t <= 7 then
+                            m.transform = t
                         end
-                        local m = monitores[salida]
+                    else
+                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.mode = partes[idx] ~= "" and partes[idx] or "preferred"
+                            idx = idx + 1
+                        end
+                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.position = partes[idx] ~= "" and partes[idx] or "auto"
+                            idx = idx + 1
+                        end
+                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.scale = partes[idx] ~= "" and partes[idx] or "1"
+                            idx = idx + 1
+                        end
 
-                        if #partes >= 2 and partes[2]:lower() == "disable" then
-                            m.disabled = true
-                            m.mode = "disable"
-                        elseif #partes >= 3 and partes[2]:lower() == "transform" then
-                            local t = tonumber(partes[3])
-                            if t and t >= 0 and t <= 7 then
-                                m.transform = t
-                            end
-                        else
-                            local idx = 2
-                            if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                                m.mode = partes[idx]
+                        while idx <= #partes do
+                            local clave = partes[idx]:lower()
+                            if clave == "transform" and partes[idx + 1] then
+                                local t = tonumber(partes[idx + 1])
+                                if t and t >= 0 and t <= 7 then m.transform = t end
+                                idx = idx + 2
+                            elseif clave == "vrr" and partes[idx + 1] then
+                                local v = tonumber(partes[idx + 1])
+                                if v then m.vrr = v end
+                                idx = idx + 2
+                            elseif clave == "mirror" and partes[idx + 1] then
+                                m.mirror = partes[idx + 1]
+                                idx = idx + 2
+                            elseif clave == "bitdepth" and partes[idx + 1] then
+                                local b = tonumber(partes[idx + 1])
+                                if b then m.bitdepth = b end
+                                idx = idx + 2
+                            elseif clave == "cm" and partes[idx + 1] then
+                                m.cm = partes[idx + 1]
+                                idx = idx + 2
+                            elseif clave == "vrr" then
+                                m.vrr = 1
                                 idx = idx + 1
-                            end
-                            if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                                m.position = partes[idx]
+                            elseif clave:match("^%d+$") and tonumber(clave) >= 0 and tonumber(clave) <= 7 and not m.transform then
+                                m.transform = tonumber(clave)
                                 idx = idx + 1
-                            end
-                            if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                                m.scale = partes[idx]
+                            else
                                 idx = idx + 1
-                            end
-
-                            while idx <= #partes do
-                                local clave = partes[idx]:lower()
-                                if clave == "transform" and partes[idx + 1] then
-                                    local t = tonumber(partes[idx + 1])
-                                    if t and t >= 0 and t <= 7 then m.transform = t end
-                                    idx = idx + 2
-                                elseif clave == "vrr" and partes[idx + 1] then
-                                    local v = tonumber(partes[idx + 1])
-                                    if v then m.vrr = v end
-                                    idx = idx + 2
-                                elseif clave == "mirror" and partes[idx + 1] then
-                                    m.mirror = partes[idx + 1]
-                                    idx = idx + 2
-                                elseif clave == "bitdepth" and partes[idx + 1] then
-                                    local b = tonumber(partes[idx + 1])
-                                    if b then m.bitdepth = b end
-                                    idx = idx + 2
-                                elseif clave == "cm" and partes[idx + 1] then
-                                    m.cm = partes[idx + 1]
-                                    idx = idx + 2
-                                elseif clave == "vrr" then
-                                    m.vrr = 1
-                                    idx = idx + 1
-                                elseif clave:match("^%d+$") and tonumber(clave) >= 0 and tonumber(clave) <= 7 and not m.transform then
-                                    m.transform = tonumber(clave)
-                                    idx = idx + 1
-                                else
-                                    idx = idx + 1
-                                end
                             end
                         end
                     end
@@ -173,12 +184,26 @@ local function aplicar_monitors_nwg()
         for _, nombre in ipairs(orden) do
             local regla = monitores[nombre]
             if regla.disabled then
-                hl.monitor({ output = regla.output, disabled = true, mode = "disable" })
+                pcall(hl.monitor, { output = regla.output or "", disabled = true, mode = "disable" })
             else
-                regla.mode = regla.mode or "preferred"
-                regla.position = regla.position or "auto"
-                regla.scale = regla.scale or "1"
-                hl.monitor(regla)
+                if not regla.mode or regla.mode == "" or regla.mode:lower() == "auto" then
+                    regla.mode = "preferred"
+                end
+                if not regla.position or regla.position == "" or regla.position:match("^%d+%.?%d*$") then
+                    regla.position = "auto"
+                end
+                if not regla.scale or regla.scale == "" then
+                    regla.scale = "1"
+                end
+                local ok, err = pcall(hl.monitor, regla)
+                if not ok then
+                    pcall(hl.monitor, {
+                        output = regla.output or "",
+                        mode = "preferred",
+                        position = "auto",
+                        scale = regla.scale or "1",
+                    })
+                end
             end
         end
     else
