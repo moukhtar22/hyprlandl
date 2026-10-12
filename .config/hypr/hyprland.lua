@@ -428,7 +428,6 @@ hl.layer_rule({
 -- General
 hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + space", hl.dsp.exec_cmd("~/.local/bin/rust-dock-toggle-all"))
-hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("~/.local/bin/rust-dock-toggle-all"))
 hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("~/.local/bin/toggle-island"))
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd("~/.local/bin/show-hotkeys"))
 hl.bind(mainMod .. " + X", hl.dsp.exec_cmd("~/.local/bin/settings-menu"))
@@ -457,13 +456,9 @@ hl.bind(mainMod .. " + BackSpace", hl.dsp.exec_cmd("~/.local/bin/powermenu-with-
 hl.bind(mainMod .. " + XF86Back", hl.dsp.exec_cmd("~/.local/bin/pywal-wallpaper-sync"))
 hl.bind(mainMod .. " + Prior", hl.dsp.exec_cmd("~/.local/bin/pywal-wallpaper-sync"))
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("~/.local/bin/wallpaper-selector"))
-hl.bind(mainMod .. " + SHIFT + w", hl.dsp.exec_cmd("~/.local/bin/wallpaper-selector"))
 hl.bind(mainMod .. " + CONTROL + W", hl.dsp.exec_cmd("~/.local/bin/wallpaper-selector"))
-hl.bind(mainMod .. " + CONTROL + w", hl.dsp.exec_cmd("~/.local/bin/wallpaper-selector"))
 hl.bind(mainMod .. " + ALT + W", hl.dsp.exec_cmd("~/.local/bin/wallpaper-changer-with-waybar-sync"))
-hl.bind(mainMod .. " + ALT + w", hl.dsp.exec_cmd("~/.local/bin/wallpaper-changer-with-waybar-sync"))
 hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd("~/.local/bin/wallpaper-change-adaptive"))
-hl.bind(mainMod .. " + SHIFT + b", hl.dsp.exec_cmd("~/.local/bin/wallpaper-change-adaptive"))
 
 -- Focus
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))

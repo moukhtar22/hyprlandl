@@ -4793,27 +4793,12 @@ step_dotfiles() {
     local supports_lua=false
 
     if [ -n "$hypr_bin" ] && [ -x "$hypr_bin" ]; then
-        local local_ver
-        local_ver=$("$hypr_bin" --version 2>/dev/null | grep -oE 'Hyprland [0-9]+\.[0-9]+' | awk '{print $2}' || true)
-        if [ -z "$local_ver" ] && command -v hyprctl >/dev/null 2>&1; then
-            local_ver=$(hyprctl version 2>/dev/null | grep -oE 'Tag: v[0-9]+\.[0-9]+|v[0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -n 1 || true)
-        fi
-        if [ -n "$local_ver" ]; then
-            local maj min
-            maj=$(echo "$local_ver" | cut -d. -f1)
-            min=$(echo "$local_ver" | cut -d. -f2)
-            if [ "$maj" -gt 0 ] 2>/dev/null || [ "$min" -ge 55 ] 2>/dev/null; then
-                supports_lua=true
-            fi
-        fi
-        if [ "$supports_lua" = false ]; then
-            if command -v ldd >/dev/null 2>&1 && ldd "$hypr_bin" 2>/dev/null | grep -qiE "liblua|libluajit"; then
-                supports_lua=true
-            elif command -v readelf >/dev/null 2>&1 && readelf -d "$hypr_bin" 2>/dev/null | grep -qiE "lua"; then
-                supports_lua=true
-            elif command -v strings >/dev/null 2>&1 && strings "$hypr_bin" 2>/dev/null | grep -qiE "luaL_newstate|lua_createtable|hyprland\.lua|Config is lua|loading lua mgr|lua mgr"; then
-                supports_lua=true
-            fi
+        if command -v ldd >/dev/null 2>&1 && ldd "$hypr_bin" 2>/dev/null | grep -qiE "liblua|libluajit"; then
+            supports_lua=true
+        elif command -v readelf >/dev/null 2>&1 && readelf -d "$hypr_bin" 2>/dev/null | grep -qiE "lua"; then
+            supports_lua=true
+        elif command -v strings >/dev/null 2>&1 && strings "$hypr_bin" 2>/dev/null | grep -qiE "luaL_newstate|lua_createtable|hyprland\.lua|Config is lua|loading lua mgr|lua mgr"; then
+            supports_lua=true
         fi
     fi
 
