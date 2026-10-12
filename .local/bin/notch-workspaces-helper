@@ -97,11 +97,29 @@ def run_hypr_json(req):
     except Exception:
         return []
 
-def hypr_dispatch(cmd):
-    res = hypr_socket_request(f"dispatch {cmd}")
-    if res is not None:
-        return res
-    return run_hyprctl(["dispatch"] + cmd.split())
+def hypr_dispatch_lua(lua):
+    res = hypr_socket_request(f"dispatch {lua}")
+    if res and res.strip().startswith("ok") and "error" not in res.lower():
+        return True
+    res = hypr_socket_request(f"eval hl.dispatch({lua})")
+    if res and res.strip().startswith("ok") and "error" not in res.lower():
+        return True
+    return False
+
+def hypr_focus_monitor(mon):
+    if not mon:
+        return
+    if not hypr_dispatch_lua(f'hl.dsp.focus({{monitor="{mon}"}})'):
+        run_hyprctl(["dispatch", "focusmonitor", str(mon)])
+
+def hypr_focus_workspace(target_id):
+    try:
+        wid = int(target_id)
+        lua = f"hl.dsp.focus({{workspace={wid}}})"
+    except ValueError:
+        lua = f'hl.dsp.focus({{workspace="{target_id}"}})'
+    if not hypr_dispatch_lua(lua):
+        run_hyprctl(["dispatch", "workspace", str(target_id)])
 
 APP_MAP = {
     "kitty": ("󰞷", "Kitty"),
@@ -355,7 +373,7 @@ def add_workspace(target_id=None):
             cand += 1
         target_id = cand
 
-    hypr_socket_request(f"dispatch workspace {target_id}")
+    hypr_focus_workspace(target_id)
     print(json.dumps({"status": "created", "id": target_id}))
 
 def remove_workspace(target_id):
@@ -400,15 +418,25 @@ def switch_workspace(target_id):
             break
 
     if target_mon:
-        hypr_socket_request(f"dispatch focusmonitor {target_mon}")
+        hypr_focus_monitor(target_mon)
 
-    hypr_socket_request(f"dispatch workspace {target_id}")
+    hypr_focus_workspace(wid)
     collapse_island()
     print(json.dumps({"status": "switched", "id": target_id, "monitor": target_mon}))
 
+def focus_window(ws_id=None, address=""):
+    if address:
+        addr = address if address.startswith("address:") else f"address:{address}"
+        if not hypr_dispatch_lua(f'hl.dsp.focus({{window="{addr}"}})'):
+            run_hyprctl(["dispatch", "focuswindow", addr])
+    if ws_id is not None:
+        hypr_focus_workspace(ws_id)
+    collapse_island()
+
 def close_window(address):
     addr = address if address.startswith("address:") else f"address:{address}"
-    hypr_socket_request(f"dispatch closewindow {addr}")
+    if not hypr_dispatch_lua(f'hl.dsp.window.close({{window="{addr}"}})'):
+        run_hyprctl(["dispatch", "closewindow", addr])
     print(json.dumps({"status": "closed", "address": address}))
 
 def is_overview_open(mon_name=""):
