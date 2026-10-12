@@ -2055,10 +2055,15 @@ ShellRoot {
                     }
                 }
 
-                // 3. Matriz de Núcleos CPU (Estilo Clásico htop)
+                // 3. Matriz de Núcleos CPU (Se adapta a cualquier cantidad de núcleos/hilos)
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 80
+                    height: {
+                        const count = root.sysMonData?.cpu?.cores_count ?? 16
+                        const cols = count > 16 ? 6 : (count <= 4 ? 2 : 4)
+                        const rows = Math.ceil(count / cols)
+                        return Math.max(52, Math.min(100, 28 + rows * 13))
+                    }
                     radius: 12
                     color: root.colSurface
                     border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
@@ -2087,10 +2092,10 @@ ShellRoot {
                             }
                         }
 
-                        // Matriz 4 columnas x 4 filas
+                        // Matriz adaptativa según cantidad de núcleos
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: 4
+                            columns: (root.sysMonData?.cpu?.cores_count ?? 16) > 16 ? 6 : ((root.sysMonData?.cpu?.cores_count ?? 16) <= 4 ? 2 : 4)
                             rowSpacing: 3
                             columnSpacing: 8
 
@@ -2137,7 +2142,7 @@ ShellRoot {
                     }
                 }
 
-                // 4. Barra de GPU (NVIDIA + iGPU)
+                // 4. Barra de GPU Dinámica (Se adapta a cualquier GPU: NVIDIA, AMD, Intel, integrada o dedicada)
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
@@ -2154,31 +2159,75 @@ ShellRoot {
 
                         Text { text: "󰢮"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
                         Text {
-                            text: "GPU Status:"
+                            text: "GPU:"
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 9
                             font.weight: Font.Bold
                         }
 
-                        // NVIDIA Info si existe
-                        Text {
-                            visible: root.sysMonData?.gpu?.has_nvidia ?? false
-                            text: (root.sysMonData?.gpu?.nvidia_name || "RTX 3050") + ": " + (root.sysMonData?.gpu?.nvidia_temp ?? 0) + "°C · " + (root.sysMonData?.gpu?.nvidia_util ?? 0) + "% Util · VRAM " + (root.sysMonData?.gpu?.nvidia_vram_used ?? 0) + "MB"
-                            color: root.colMuted
-                            font.family: "JetBrainsMono Nerd Font"
-                            font.pixelSize: 8
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
+                        Repeater {
+                            model: root.sysMonData?.gpu?.devices || []
+                            delegate: RowLayout {
+                                spacing: 4
+                                Rectangle {
+                                    height: 22
+                                    implicitWidth: gpuPillRow.implicitWidth + 14
+                                    radius: 11
+                                    color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05)
+                                    border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                    border.width: 1
+
+                                    RowLayout {
+                                        id: gpuPillRow
+                                        anchors.centerIn: parent
+                                        spacing: 5
+
+                                        Text {
+                                            text: modelData.short_name || modelData.name || "GPU"
+                                            color: root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 8
+                                            font.weight: Font.Bold
+                                        }
+
+                                        Text {
+                                            visible: (modelData.temp_c ?? 0) > 0
+                                            text: "· " + modelData.temp_c + "°C"
+                                            color: (modelData.temp_c ?? 0) > 80 ? "#e06c75" : root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 8
+                                        }
+
+                                        Text {
+                                            visible: (modelData.util_pct ?? 0) > 0 || modelData.has_util
+                                            text: "· " + modelData.util_pct + "% Util"
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 8
+                                        }
+
+                                        Text {
+                                            visible: !!modelData.vram_str
+                                            text: "· " + modelData.vram_str
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 8
+                                        }
+                                    }
+                                }
+                            }
                         }
 
-                        // iGPU Info
                         Text {
-                            text: "iGPU: " + (root.sysMonData?.gpu?.amd_temp ?? 0) + "°C"
+                            visible: (root.sysMonData?.gpu?.devices?.length ?? 0) === 0
+                            text: "Standard Integrated Graphics"
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 8
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
                 }
 

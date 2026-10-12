@@ -185,30 +185,9 @@ def get_disk_info():
     }
 
 def get_gpu_info():
-    info = {
-        "has_nvidia": False,
-        "nvidia_name": "NVIDIA GPU",
-        "nvidia_temp": 0,
-        "nvidia_util": 0,
-        "nvidia_vram_used": 0,
-        "nvidia_vram_total": 0,
-        "amd_temp": 0
-    }
-
-    # AMD iGPU temp
-    for p in glob.glob("/sys/class/hwmon/hwmon*/temp*_input"):
-        try:
-            name_file = os.path.join(os.path.dirname(p), "name")
-            if os.path.exists(name_file):
-                with open(name_file) as f:
-                    if "amdgpu" in f.read().strip().lower():
-                        with open(p) as tf:
-                            info["amd_temp"] = int(int(tf.read().strip()) / 1000)
-                            break
-        except Exception:
-            pass
-
-    # NVIDIA
+    devices = []
+    
+    # 1. NVIDIA via nvidia-smi
     try:
         res = subprocess.run(
             ["nvidia-smi", "--query-gpu=gpu_name,temperature.gpu,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
@@ -218,18 +197,153 @@ def get_gpu_info():
             timeout=1
         )
         if res.returncode == 0 and res.stdout.strip():
-            parts = [x.strip() for x in res.stdout.strip().split(",")]
-            if len(parts) >= 5:
-                info["has_nvidia"] = True
-                info["nvidia_name"] = parts[0]
-                info["nvidia_temp"] = int(parts[1]) if parts[1].isdigit() else 0
-                info["nvidia_util"] = int(parts[2]) if parts[2].isdigit() else 0
-                info["nvidia_vram_used"] = int(parts[3]) if parts[3].isdigit() else 0
-                info["nvidia_vram_total"] = int(parts[4]) if parts[4].isdigit() else 0
+            for line in res.stdout.strip().splitlines():
+                parts = [x.strip() for x in line.split(",")]
+                if len(parts) >= 5:
+                    name = parts[0]
+                    short_name = name.replace("NVIDIA GeForce ", "").replace("NVIDIA ", "").replace("Laptop GPU", "Mobile")
+                    devices.append({
+                        "name": name,
+                        "short_name": short_name,
+                        "vendor": "nvidia",
+                        "type": "discrete",
+                        "temp_c": int(parts[1]) if parts[1].isdigit() else 0,
+                        "util_pct": int(parts[2]) if parts[2].isdigit() else 0,
+                        "vram_used_mb": int(parts[3]) if parts[3].isdigit() else 0,
+                        "vram_total_mb": int(parts[4]) if parts[4].isdigit() else 0,
+                        "vram_str": f"{parts[3]}MB / {parts[4]}MB"
+                    })
     except Exception:
         pass
 
-    return info
+    # 2. DRM cards (AMD, Intel, etc.)
+    pci_names = {}
+    try:
+        res = subprocess.run(["lspci"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=1)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if any(w in line.lower() for w in ["vga", "3d", "display"]):
+                    pci_id = line.split()[0]
+                    desc = line.split(":", 2)[-1].strip()
+                    pci_names[pci_id] = desc
+    except Exception:
+        pass
+
+    for card in sorted(glob.glob("/sys/class/drm/card[0-9]")):
+        device = os.path.join(card, "device")
+        if not os.path.exists(device):
+            continue
+            
+        driver_path = os.path.join(device, "driver")
+        driver_name = os.path.basename(os.path.realpath(driver_path)) if os.path.exists(driver_path) else ""
+        if driver_name == "nvidia":
+            continue
+            
+        vendor = "unknown"
+        gpu_name = ""
+        
+        pci_slot = ""
+        uevent_path = os.path.join(device, "uevent")
+        if os.path.exists(uevent_path):
+            with open(uevent_path) as f:
+                for uline in f:
+                    if uline.startswith("PCI_SLOT_NAME="):
+                        pci_slot = uline.split("=", 1)[1].strip()
+                        break
+                        
+        if pci_slot and pci_slot in pci_names:
+            gpu_name = pci_names[pci_slot]
+        elif any(pci_slot.startswith(k) for k in pci_names):
+            gpu_name = [pci_names[k] for k in pci_names if pci_slot.startswith(k)][0]
+
+        if "amd" in driver_name or "radeon" in driver_name:
+            vendor = "amd"
+            if not gpu_name:
+                gpu_name = "AMD Radeon Graphics"
+        elif "i915" in driver_name or "xe" in driver_name:
+            vendor = "intel"
+            if not gpu_name:
+                gpu_name = "Intel Graphics"
+        elif driver_name:
+            vendor = driver_name
+            if not gpu_name:
+                gpu_name = f"{driver_name.upper()} GPU"
+        else:
+            continue
+
+        temp_c = 0
+        for hw in glob.glob(os.path.join(device, "hwmon/hwmon*")):
+            for t_input in glob.glob(os.path.join(hw, "temp*_input")):
+                try:
+                    with open(t_input) as tf:
+                        t_val = int(int(tf.read().strip()) / 1000)
+                        if 15 <= t_val <= 120:
+                            temp_c = t_val
+                            break
+                except Exception:
+                    pass
+            if temp_c > 0:
+                break
+
+        util_pct = -1
+        busy_file = os.path.join(device, "gpu_busy_percent")
+        if os.path.exists(busy_file):
+            try:
+                with open(busy_file) as f:
+                    util_pct = int(f.read().strip())
+            except Exception:
+                pass
+
+        vram_used_mb = 0
+        vram_total_mb = 0
+        vram_str = ""
+        vram_used_file = os.path.join(device, "mem_info_vram_used")
+        vram_total_file = os.path.join(device, "mem_info_vram_total")
+        if os.path.exists(vram_used_file) and os.path.exists(vram_total_file):
+            try:
+                with open(vram_used_file) as fu, open(vram_total_file) as ft:
+                    vram_used_mb = int(int(fu.read().strip()) / (1024**2))
+                    vram_total_mb = int(int(ft.read().strip()) / (1024**2))
+                    vram_str = f"{vram_used_mb}MB / {vram_total_mb}MB"
+            except Exception:
+                pass
+
+        short_name = gpu_name
+        if "[" in short_name and "]" in short_name:
+            brackets = [p.split("]")[0] for p in short_name.split("[") if "]" in p]
+            if brackets:
+                short_name = brackets[-1]
+        for prefix in ["Advanced Micro Devices, Inc. [AMD/ATI] ", "Intel Corporation "]:
+            short_name = short_name.replace(prefix, "")
+
+        devices.append({
+            "name": gpu_name or short_name,
+            "short_name": short_name,
+            "vendor": vendor,
+            "type": "integrated" if any(w in gpu_name.lower() for w in ["integrated", "680m", "780m", "uhd", "iris"]) else "discrete",
+            "temp_c": temp_c,
+            "util_pct": max(0, util_pct) if util_pct >= 0 else 0,
+            "has_util": (util_pct >= 0),
+            "vram_used_mb": vram_used_mb,
+            "vram_total_mb": vram_total_mb,
+            "vram_str": vram_str
+        })
+
+    has_nvidia = any(d["vendor"] == "nvidia" for d in devices)
+    nv_device = next((d for d in devices if d["vendor"] == "nvidia"), {})
+    amd_temp = next((d["temp_c"] for d in devices if d["vendor"] == "amd"), 0)
+
+    return {
+        "devices": devices,
+        "count": len(devices),
+        "has_nvidia": has_nvidia,
+        "nvidia_name": nv_device.get("short_name", nv_device.get("name", "NVIDIA GPU")),
+        "nvidia_temp": nv_device.get("temp_c", 0),
+        "nvidia_util": nv_device.get("util_pct", 0),
+        "nvidia_vram_used": nv_device.get("vram_used_mb", 0),
+        "nvidia_vram_total": nv_device.get("vram_total_mb", 0),
+        "amd_temp": amd_temp
+    }
 
 def get_system_summary():
     uptime_str = "0m"

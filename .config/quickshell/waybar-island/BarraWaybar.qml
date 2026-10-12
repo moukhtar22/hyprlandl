@@ -250,18 +250,39 @@ print(f\"{bars}|{overall_pct}\")
             # 2. RAM
             ram_used=$(free -m | awk '/Mem:/ {printf \"%.1fG/%.1fG\", $3/1024, $2/1024}')
 
-            # 3. CPU Temp
-            cpu_raw=$(cat /sys/class/hwmon/hwmon5/temp1_input 2>/dev/null || cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
-            if [ -n \"$cpu_raw\" ]; then
-                cpu_temp=\"󰔏 $((cpu_raw / 1000))°C\"
+            # 3. CPU Temp (Dynamic scan: AMD k10temp, Intel coretemp, zenpower, or thermal_zone)
+            cpu_raw=\"\"
+            for hw in /sys/class/hwmon/hwmon*; do
+                hwn=\$(cat \"\$hw/name\" 2>/dev/null)
+                case \"\$hwn\" in
+                    k10temp|coretemp|zenpower|cpu_thermal)
+                        cpu_raw=\$(cat \"\$hw/temp1_input\" 2>/dev/null || cat \"\$hw/temp2_input\" 2>/dev/null)
+                        [ -n \"\$cpu_raw\" ] && break
+                        ;;
+                esac
+            done
+            [ -z \"\$cpu_raw\" ] && cpu_raw=\$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | head -n1)
+            if [ -n \"\$cpu_raw\" ] && [ \"\$cpu_raw\" -gt 0 ] 2>/dev/null; then
+                cpu_temp=\"󰔏 \$((cpu_raw / 1000))°C\"
             else
-                cpu_temp=\"󰔏 58°C\"
+                cpu_temp=\"󰔏 --°C\"
             fi
 
-            # 4. GPU Temp
-            gpu_temp=$($HOME/.config/waybar/scripts/nvidia-temp.sh 2>/dev/null | jq -r '.text' 2>/dev/null)
-            [ -z \"$gpu_temp\" ] && gpu_temp=\"󰔏 $(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')°C\"
-            [ -z \"$gpu_temp\" ] && gpu_temp=\"󰔏 51°C\"
+            # 4. GPU Temp (Dynamic scan: NVIDIA nvidia-smi, AMD amdgpu, or Intel drm)
+            gpu_t=\"\"
+            if command -v nvidia-smi >/dev/null 2>&1; then
+                nv_t=\$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')
+                [ -n \"\$nv_t\" ] && [ \"\$nv_t\" -gt 0 ] 2>/dev/null && gpu_t=\"\${nv_t}°C\"
+            fi
+            if [ -z \"\$gpu_t\" ]; then
+                for hw in /sys/class/hwmon/hwmon*; do
+                    if grep -qi \"amdgpu\" \"\$hw/name\" 2>/dev/null; then
+                        t_val=\$(cat \"\$hw/temp1_input\" 2>/dev/null)
+                        [ -n \"\$t_val\" ] && [ \"\$t_val\" -gt 0 ] 2>/dev/null && gpu_t=\"\$((t_val / 1000))°C\" && break
+                    fi
+                done
+            fi
+            [ -z \"\$gpu_t\" ] && gpu_temp=\"󰔏 --°C\" || gpu_temp=\"󰔏 \$gpu_t\"
 
             # 5. Battery
             has_b=0
