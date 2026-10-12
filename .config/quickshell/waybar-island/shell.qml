@@ -5128,7 +5128,7 @@ ShellRoot {
                         // Card de Perfil de Gráficos / GPU Switcher
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: root.gpuData.has_hybrid ? 112 : 62
+                            Layout.preferredHeight: root.gpuData.has_hybrid ? 136 : 64
                             radius: 14
                             color: root.colSurface
                             border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
