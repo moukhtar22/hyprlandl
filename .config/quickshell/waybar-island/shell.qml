@@ -284,6 +284,16 @@ ShellRoot {
     property bool otaUpdating: false
     property string otaChangelogText: ""
 
+    // GPU Profile state (Hybrid / Integrated / Dedicated)
+    property var gpuData: ({
+        has_hybrid: false,
+        current_mode: "hybrid",
+        active_gpu: "",
+        igpu_name: "",
+        dgpu_name: "",
+        modes: []
+    })
+
     // Hyprland live state
     property bool hyprAnim: true
     property bool hyprBlur: true
@@ -439,6 +449,7 @@ ShellRoot {
         clipListProc.running = true
         otaStatusProc.running = true
         otaChangelogProc.running = true
+        gpuStatusProc.running = true
     }
 
     IpcHandler {
@@ -573,6 +584,15 @@ ShellRoot {
             if (!panel) return "unavailable"
             battProc.running = true
             return "batteries"
+        }
+        function open_gpu(screenName: string): string {
+            let panel = root.setPanelState(screenName, true, 1, 0)
+            if (!panel) return "unavailable"
+            gpuStatusProc.running = true
+            return "gpu"
+        }
+        function openGpu(screenName: string): string {
+            return open_gpu(screenName)
         }
         function openOta(screenName: string): string {
             let current = root.panelForScreen(screenName)
@@ -1319,6 +1339,27 @@ ShellRoot {
             root.otaUpdating = false
             otaStatusProc.running = true
         }
+    }
+
+    Process {
+        id: gpuStatusProc
+        running: true
+        command: ["bash", "-c", "$HOME/.local/bin/gpu-profile status --json"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const data = JSON.parse(text.trim())
+                    root.gpuData = data
+                } catch(e) {}
+            }
+        }
+    }
+
+    Timer {
+        id: gpuRefreshTimer
+        interval: 350
+        repeat: false
+        onTriggered: gpuStatusProc.running = true
     }
 
     Timer {
@@ -5081,6 +5122,250 @@ ShellRoot {
                             battProc.running = true
                             }
                             }
+                            }
+                        }
+
+                        // Card de Perfil de Gráficos / GPU Switcher
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: root.gpuData.has_hybrid ? 112 : 62
+                            radius: 14
+                            color: root.colSurface
+                            border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                            border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 8
+
+                                // Cabecera: Icono, Título y GPU Activa
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+
+                                    Rectangle {
+                                        width: 36; height: 36; radius: 18
+                                        color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15)
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "󰢮"
+                                            color: root.colAccent
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 18
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+                                        Text {
+                                            text: "Graphics Profile"
+                                            color: root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 12
+                                            font.weight: Font.Bold
+                                        }
+                                        Text {
+                                            text: root.gpuData.active_gpu || "Auto Graphics Detection"
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 28; height: 28; radius: 14
+                                        color: gpuRefHover.containsMouse ? root.colSurfaceHover : "transparent"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "󰑐"
+                                            color: root.colMuted
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 13
+                                        }
+                                        MouseArea {
+                                            id: gpuRefHover
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: gpuStatusProc.running = true
+                                        }
+                                    }
+                                }
+
+                                // 3 Botones de Selección (Solo para sistemas híbridos con dGPU + iGPU)
+                                RowLayout {
+                                    visible: root.gpuData.has_hybrid
+                                    Layout.fillWidth: true
+                                    spacing: 8
+
+                                    // Integrated (iGPU)
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 38
+                                        radius: 10
+                                        color: root.gpuData.current_mode === "integrated" ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 1
+                                            RowLayout {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                spacing: 4
+                                                Text {
+                                                    text: "󰌢"
+                                                    color: root.gpuData.current_mode === "integrated" ? root.colBg : root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 11
+                                                }
+                                                Text {
+                                                    text: "Integrated"
+                                                    color: root.gpuData.current_mode === "integrated" ? root.colBg : root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+                                            Text {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                text: "iGPU Only"
+                                                color: root.gpuData.current_mode === "integrated" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 8
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/gpu-profile set integrated")
+                                                gpuRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+
+                                    // Hybrid (Auto)
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 38
+                                        radius: 10
+                                        color: root.gpuData.current_mode === "hybrid" ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 1
+                                            RowLayout {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                spacing: 4
+                                                Text {
+                                                    text: "⚡"
+                                                    color: root.gpuData.current_mode === "hybrid" ? root.colBg : root.colFg
+                                                    font.pixelSize: 10
+                                                }
+                                                Text {
+                                                    text: "Hybrid"
+                                                    color: root.gpuData.current_mode === "hybrid" ? root.colBg : root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+                                            Text {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                text: "PRIME Auto"
+                                                color: root.gpuData.current_mode === "hybrid" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 8
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/gpu-profile set hybrid")
+                                                gpuRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+
+                                    // Dedicated (dGPU)
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 38
+                                        radius: 10
+                                        color: root.gpuData.current_mode === "dedicated" ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08)
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                                        ColumnLayout {
+                                            anchors.centerIn: parent
+                                            spacing: 1
+                                            RowLayout {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                spacing: 4
+                                                Text {
+                                                    text: "󰢮"
+                                                    color: root.gpuData.current_mode === "dedicated" ? root.colBg : root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 11
+                                                }
+                                                Text {
+                                                    text: "Dedicated"
+                                                    color: root.gpuData.current_mode === "dedicated" ? root.colBg : root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+                                            Text {
+                                                Layout.alignment: Qt.AlignHCenter
+                                                text: "dGPU Only"
+                                                color: root.gpuData.current_mode === "dedicated" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 8
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.runCmd("$HOME/.local/bin/gpu-profile set dedicated")
+                                                gpuRefreshTimer.restart()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Hardware chips footer
+                                RowLayout {
+                                    visible: root.gpuData.has_hybrid
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        text: "iGPU: " + (root.gpuData.igpu_name || "Integrated")
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 8
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: "dGPU: " + (root.gpuData.dgpu_name || "Dedicated")
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 8
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                }
                             }
                         }
 

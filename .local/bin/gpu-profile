@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""
+gpu-profile: Hybrid / Dedicated / Integrated GPU profile switcher for Hyprland.
+Integrates with Hyprland AQ_DRM_DEVICES, supergfxctl, envycontrol, and PRIME offload.
+"""
+
+import sys
+import os
+import subprocess
+import re
+import glob
+import json
+
+CONFIG_DIR = os.path.expanduser("~/.config/hypr")
+GPU_CONF_PATH = os.path.join(CONFIG_DIR, "gpu.conf")
+GPU_JSON_PATH = os.path.join(CONFIG_DIR, "gpu.json")
+
+def detect_gpus():
+    gpus = []
+    try:
+        raw = subprocess.check_output(["lspci", "-nn"], stderr=subprocess.DEVNULL).decode("utf-8")
+    except Exception:
+        return gpus
+
+    for line in raw.splitlines():
+        if any(k in line for k in ["VGA compatible controller", "3D controller"]):
+            m = re.match(r"^([0-9a-fA-F:\.]+)\s+(.*?):\s+(.*?)\s+\[([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\]", line)
+            if not m:
+                continue
+            pci, kind, full_name, vid, did = m.groups()
+
+            card_path = ""
+            for p in glob.glob(f"/dev/dri/by-path/pci-*{pci}*-card"):
+                card_path = os.path.realpath(p)
+
+            is_nvidia = vid.lower() == "10de" or "nvidia" in full_name.lower()
+            is_intel = vid.lower() == "8086" or "intel" in full_name.lower()
+            is_amd = vid.lower() == "1002" or "amd" in full_name.lower()
+
+            brackets = re.findall(r"\[(.*?)\]", full_name)
+            if brackets:
+                clean_name = brackets[-1]
+            else:
+                clean_name = full_name
+
+            if is_nvidia:
+                vendor = "NVIDIA"
+                is_dedicated = True
+            elif is_amd:
+                vendor = "AMD"
+                is_dedicated = bool(re.search(r"rx\s+\d+|discrete", full_name, re.I))
+            else:
+                vendor = "Intel"
+                is_dedicated = bool(re.search(r"arc\s+\w+", full_name, re.I))
+
+            gpus.append({
+                "pci": pci,
+                "vendor": vendor,
+                "name": clean_name,
+                "full_name": full_name,
+                "card": card_path,
+                "is_dedicated": is_dedicated
+            })
+    return gpus
+
+def get_status_dict():
+    gpus = detect_gpus()
+    dgpu = next((g for g in gpus if g["is_dedicated"]), None)
+    igpu = next((g for g in gpus if not g["is_dedicated"]), None)
+
+    has_hybrid = bool(dgpu and igpu)
+    current_mode = "hybrid" if has_hybrid else "default"
+
+    if os.path.isfile(GPU_JSON_PATH):
+        try:
+            with open(GPU_JSON_PATH, "r") as f:
+                saved = json.load(f)
+                if saved.get("mode") in ["hybrid", "integrated", "dedicated"]:
+                    current_mode = saved["mode"]
+        except Exception:
+            pass
+
+    tool_backend = "hyprland"
+    if subprocess.run(["which", "supergfxctl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        tool_backend = "supergfxctl"
+    elif subprocess.run(["which", "envycontrol"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        tool_backend = "envycontrol"
+
+    if current_mode == "integrated" and igpu:
+        active_name = f"{igpu['name']} (Integrated)"
+    elif current_mode == "dedicated" and dgpu:
+        active_name = f"{dgpu['name']} (Dedicated)"
+    elif dgpu and igpu:
+        active_name = f"{igpu['name']} + {dgpu['name']} (Hybrid)"
+    elif gpus:
+        active_name = gpus[0]["name"]
+    else:
+        active_name = "Default Display Adapter"
+
+    return {
+        "has_hybrid": has_hybrid,
+        "current_mode": current_mode,
+        "active_gpu": active_name,
+        "igpu_name": igpu["name"] if igpu else "",
+        "igpu_card": igpu["card"] if igpu else "",
+        "dgpu_name": dgpu["name"] if dgpu else "",
+        "dgpu_card": dgpu["card"] if dgpu else "",
+        "backend_tool": tool_backend,
+        "gpus": gpus,
+        "modes": [
+            {"id": "hybrid", "name": "Hybrid (Auto)", "desc": "iGPU desktop + dGPU on-demand", "icon": "󰢮"},
+            {"id": "integrated", "name": "Integrated (iGPU)", "desc": "Power saving, maximum battery", "icon": "󰌢"},
+            {"id": "dedicated", "name": "Dedicated (dGPU)", "desc": "Maximum rendering performance", "icon": "󰢮"}
+        ]
+    }
+
+def set_profile(mode):
+    mode = mode.lower().strip()
+    if mode not in ["hybrid", "integrated", "dedicated"]:
+        print(f"Error: Invalid mode '{mode}'. Choose: hybrid, integrated, dedicated", file=sys.stderr)
+        sys.exit(1)
+
+    status = get_status_dict()
+    igpu_card = status.get("igpu_card") or "/dev/dri/card1"
+    dgpu_card = status.get("dgpu_card") or "/dev/dri/card0"
+    igpu_name = status.get("igpu_name") or "Integrated"
+    dgpu_name = status.get("dgpu_name") or "Dedicated"
+
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+
+    conf_lines = [
+        "# ═══════════════════════════════════════════════════════════════════════════════",
+        "# RHYTHM HYPRLAND - GPU CONFIGURATION (Auto-generated by gpu-profile)",
+        "# ═══════════════════════════════════════════════════════════════════════════════\n"
+    ]
+
+    if mode == "integrated":
+        conf_lines.append("# Mode: Integrated Only (Power Saving)")
+        conf_lines.append(f"env = AQ_DRM_DEVICES,{igpu_card}")
+        conf_lines.append("env = __NV_PRIME_RENDER_OFFLOAD,0")
+        title = "Integrated GPU Activated"
+        desc = f"Running exclusively on {igpu_name} for maximum battery life."
+    elif mode == "dedicated":
+        conf_lines.append("# Mode: Dedicated Only (Maximum Performance)")
+        conf_lines.append(f"env = AQ_DRM_DEVICES,{dgpu_card}:{igpu_card}")
+        conf_lines.append("env = __NV_PRIME_RENDER_OFFLOAD,1")
+        conf_lines.append("env = __GLX_VENDOR_LIBRARY_NAME,nvidia")
+        conf_lines.append("env = LIBVA_DRIVER_NAME,nvidia")
+        conf_lines.append("env = NVD_BACKEND,direct")
+        title = "Dedicated GPU Activated"
+        desc = f"Running on {dgpu_name} for maximum gaming and render performance."
+    else:  # hybrid
+        conf_lines.append("# Mode: Hybrid / Auto (PRIME Render Offload)")
+        conf_lines.append(f"env = AQ_DRM_DEVICES,{igpu_card}:{dgpu_card}")
+        conf_lines.append("env = __NV_PRIME_RENDER_OFFLOAD,1")
+        conf_lines.append("env = __GLX_VENDOR_LIBRARY_NAME,nvidia")
+        title = "Hybrid Graphics Activated"
+        desc = f"{igpu_name} desktop with {dgpu_name} available on demand."
+
+    with open(GPU_CONF_PATH, "w") as f:
+        f.write("\n".join(conf_lines) + "\n")
+
+    with open(GPU_JSON_PATH, "w") as f:
+        json.dump({"mode": mode, "igpu": igpu_name, "dgpu": dgpu_name}, f, indent=2)
+
+    # Invoke supergfxctl if present and active
+    if subprocess.run(["which", "supergfxctl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        sg_mode = "Integrated" if mode == "integrated" else ("Dedicated" if mode == "dedicated" else "Hybrid")
+        subprocess.run(["supergfxctl", "-m", sg_mode], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Reload Hyprland
+    subprocess.run(["hyprctl", "reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Notify
+    try:
+        subprocess.run([
+            "notify-send", "-a", "GPU Profile", "-i", "video-display",
+            title, desc
+        ], stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+    print(f"GPU Profile set to: {mode} ({title})")
+
+def run_on_dgpu(cmd_args):
+    if not cmd_args:
+        print("Usage: gpu-profile run <command...>", file=sys.stderr)
+        sys.exit(1)
+
+    env = os.environ.copy()
+    env["__NV_PRIME_RENDER_OFFLOAD"] = "1"
+    env["__GLX_VENDOR_LIBRARY_NAME"] = "nvidia"
+    env["__VK_LAYER_NV_optimus"] = "NVIDIA_only"
+    env["DRI_PRIME"] = "1"
+
+    if subprocess.run(["which", "prime-run"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        os.execvpe("prime-run", ["prime-run"] + cmd_args, env)
+    else:
+        os.execvpe(cmd_args[0], cmd_args, env)
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else "status"
+
+    if cmd in ["status", "info"]:
+        as_json = "--json" in args or "-j" in args
+        st = get_status_dict()
+        if as_json:
+            print(json.dumps(st, indent=2))
+        else:
+            print(f"Current Mode:  {st['current_mode'].upper()}")
+            print(f"Active GPU:    {st['active_gpu']}")
+            if st['has_hybrid']:
+                print(f"Integrated:    {st['igpu_name']} ({st['igpu_card']})")
+                print(f"Dedicated:     {st['dgpu_name']} ({st['dgpu_card']})")
+            else:
+                for idx, g in enumerate(st.get("gpus", [])):
+                    print(f"GPU {idx}:         {g['name']} ({g['vendor']})")
+    elif cmd in ["set", "switch"]:
+        if len(args) < 2:
+            print("Usage: gpu-profile set <hybrid|integrated|dedicated>", file=sys.stderr)
+            sys.exit(1)
+        set_profile(args[1])
+    elif cmd in ["get"]:
+        st = get_status_dict()
+        print(st["current_mode"])
+    elif cmd in ["run"]:
+        run_on_dgpu(args[1:])
+    elif cmd in ["list"]:
+        st = get_status_dict()
+        for m in st["modes"]:
+            print(f"{m['id']}: {m['name']} - {m['desc']}")
+    else:
+        print("Usage: gpu-profile [status|set|get|run|list] [options]")
+
+if __name__ == "__main__":
+    main()

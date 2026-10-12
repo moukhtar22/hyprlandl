@@ -248,6 +248,26 @@ if os.getenv("LIBVA_DRIVER_NAME") == "nvidia" or (os.execute("lspci 2>/dev/null 
     hl.env("__NV_PRIME_RENDER_OFFLOAD", "1")
 end
 
+-- Cargar perfil de GPU (Hybrid / Integrated / Dedicated) si existe
+local function aplicar_gpu_conf()
+    local home = os.getenv("HOME") or ""
+    local conf_ruta = home .. "/.config/hypr/gpu.conf"
+    local f = io.open(conf_ruta, "r")
+    if f then
+        for linea in f:lines() do
+            local limpio = linea:gsub("^%s+", ""):gsub("%s+$", "")
+            if limpio ~= "" and not limpio:match("^#") then
+                local env_var, env_val = limpio:match("^env%s*=%s*([^,]+)%s*,%s*(.-)$")
+                if env_var and env_val then
+                    hl.env(env_var:gsub("^%s+", ""):gsub("%s+$", ""), env_val:gsub("^%s+", ""):gsub("%s+$", ""))
+                end
+            end
+        end
+        f:close()
+    end
+end
+aplicar_gpu_conf()
+
 -- General
 hl.config({
     general = {
@@ -451,6 +471,7 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 -- dispatcher de la API de lua.
 hl.bind("ALT + Return", hl.dsp.exec_cmd("hyprctl eval 'hl.dispatch(hl.dsp.window.fullscreen(0))'"))
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
+hl.bind(mainMod .. " + G", hl.dsp.exec_cmd("~/.local/bin/gpu-selector"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle_performance.sh"))
 hl.bind(mainMod .. " + BackSpace", hl.dsp.exec_cmd("~/.local/bin/powermenu-with-monitor-detection"))
 hl.bind(mainMod .. " + XF86Back", hl.dsp.exec_cmd("~/.local/bin/pywal-wallpaper-sync"))
