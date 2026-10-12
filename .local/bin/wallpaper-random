@@ -33,13 +33,14 @@ if ! pgrep -x "awww-daemon" > /dev/null 2>&1; then
     sleep 0.5
 fi
 
-"$HOME/.local/bin/wallpaper-bars" hide
+"$HOME/.local/bin/wallpaper-bars" hide all
 # Apply wallpaper (backend picks awww or mpvpaper)
 if "$HOME/.local/bin/wallpaper-backend" apply "$SELECTED"; then
     log "Wallpaper applied: $SELECTED"
     notify-send -u low "Wallpaper" "$(basename "$SELECTED")" 2>/dev/null || true
 else
     log "Failed to apply wallpaper with backend"
+    "$HOME/.local/bin/wallpaper-bars" show all
     exit 1
 fi
 
@@ -59,4 +60,4 @@ if command -v wal > /dev/null 2>&1; then
 fi
 
 sleep 0.4
-"$HOME/.local/bin/wallpaper-bars" show
+"$HOME/.local/bin/wallpaper-bars" show all

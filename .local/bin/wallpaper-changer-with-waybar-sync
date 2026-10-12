@@ -24,12 +24,12 @@ log() {
 
 # Función para ocultar barras de forma temporal y segura
 hide_waybar() {
-    "$HOME/.local/bin/wallpaper-bars" hide
+    "$HOME/.local/bin/wallpaper-bars" hide all
 }
 
 # Función para mostrar barras de forma segura
 show_waybar() {
-    "$HOME/.local/bin/wallpaper-bars" show
+    "$HOME/.local/bin/wallpaper-bars" show all
 }
 
 # Función para recargar Waybar CSS
@@ -37,11 +37,10 @@ reload_waybar_css() {
     pkill -SIGUSR1 waybar 2>/dev/null || true
 }
 
-# Función de limpieza (SIN REINICIAR WAYBAR)
+# Función de limpieza
 cleanup() {
     local exit_code=$?
-    # NO restaurar Waybar al salir para evitar múltiples reinicios
-    # show_waybar
+    show_waybar
     rm -f "$TEMP_FILE"* "$LOCK_FILE" 2>/dev/null || true
     if [[ $exit_code -ne 0 ]]; then
         log "ERROR: Script terminó con código $exit_code"

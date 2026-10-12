@@ -21,11 +21,11 @@ PanelWindow {
     implicitHeight: 40
     height: 40
 
-    readonly property bool isScreenHidden: (typeof root !== "undefined" && barWin.screen && root.hiddenScreens && root.hiddenScreens[barWin.screen.name] === true)
+    readonly property bool isScreenHidden: (islandRoot && barWin.screen && islandRoot.hiddenScreens && islandRoot.hiddenScreens[barWin.screen.name] === true)
     visible: {
-        if (typeof root !== "undefined") {
-            if (root.enableQuickshellWaybar === false) return false
-            if (root.islandVisible === false) return false
+        if (islandRoot) {
+            if (islandRoot.enableQuickshellWaybar === false) return false
+            if (islandRoot.islandVisible === false) return false
             if (isScreenHidden) return false
         }
         return true
@@ -43,6 +43,7 @@ PanelWindow {
         id: walFile
         path: Quickshell.env("HOME") + "/.cache/wal/colors.json"
         watchChanges: true
+        onFileChanged: walFile.reload()
     }
 
     readonly property var walData: {

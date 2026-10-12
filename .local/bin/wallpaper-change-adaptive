@@ -877,13 +877,14 @@ fi
 
 log "PASO 1: Aplicando wallpaper: $selected_file"
 
-"$HOME/.local/bin/wallpaper-bars" hide
+"$HOME/.local/bin/wallpaper-bars" hide all
 # Aplicar wallpaper (backend: awww o mpvpaper segun formato)
 if "$HOME/.local/bin/wallpaper-backend" apply "$selected_file"; then
     log "Wallpaper aplicado con backend"
     notify "Wallpaper aplicado: $(basename "$selected_file")"
 else
     log "Error al aplicar wallpaper con backend"
+    "$HOME/.local/bin/wallpaper-bars" show all
     exit 1
 fi
 
@@ -912,10 +913,12 @@ fi
 
 # Las barras vuelven ya con la paleta nueva aplicada
 sleep 0.4
-"$HOME/.local/bin/wallpaper-bars" show
+"$HOME/.local/bin/wallpaper-bars" show all
 
-# Verificación final de Waybar
-if ! pgrep -x waybar > /dev/null; then
+# Verificación final de barras
+if "$HOME/.local/bin/island-running" >/dev/null 2>&1; then
+    quickshell ipc -p "$HOME/.config/quickshell/waybar-island/shell.qml" --any-display call island reveal all >/dev/null 2>&1 || true
+elif ! pgrep -x waybar > /dev/null 2>&1; then
     log "CRÍTICO: Waybar no está ejecutándose al finalizar. Iniciando respaldo..."
     notify "Iniciando waybar de respaldo..."
     

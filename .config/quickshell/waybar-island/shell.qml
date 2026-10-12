@@ -612,8 +612,8 @@ ShellRoot {
             return "hidden"
         }
         function reveal(screenName: string): string {
+            root.islandVisible = true
             if (!screenName || screenName === "" || screenName === "all") {
-                root.islandVisible = true
                 root.hiddenScreens = {}
             } else {
                 let hs = Object.assign({}, root.hiddenScreens)

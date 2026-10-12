@@ -62,7 +62,7 @@ BARRAS_ANTES_WAYBAR=$(contar_capas waybar)
 BARRAS_ANTES_DOCK=$(contar_capas rust-dock)
 
 # 1. ANIMACION DE SALIDA: Ocultar barras suavemente
-"$HOME/.local/bin/wallpaper-bars" hide
+"$HOME/.local/bin/wallpaper-bars" hide all
 
 # 2. APLICAR WALLPAPER (awww para estaticos, mpvpaper para gif/webp animados)
 if [ -x "$HOME/.local/bin/wallpaper-backend" ]; then
@@ -112,5 +112,5 @@ for ((i = 0; i < 25; i++)); do
 done
 
 # 5. ANIMACION DE ENTRADA SINCRONIZADA: Revelar Waybar, Dynamic Island y Rust-Dock
-"$HOME/.local/bin/wallpaper-bars" show
+"$HOME/.local/bin/wallpaper-bars" show all
 
