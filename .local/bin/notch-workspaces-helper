@@ -6,6 +6,7 @@ import json
 import glob
 import re
 import time
+import socket
 from concurrent.futures import ThreadPoolExecutor
 
 TARGET_UID = os.environ.get("SUDO_UID") or os.environ.get("NOTCH_UID")
@@ -26,15 +27,81 @@ if "WAYLAND_DISPLAY" not in os.environ:
     else:
         os.environ["WAYLAND_DISPLAY"] = "wayland-1"
 
-if "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
-    sig_paths = glob.glob(f"{xdg_runtime}/hypr/*")
-    if sig_paths:
-        sig_paths.sort(key=os.path.getmtime, reverse=True)
-        for sp in sig_paths:
-            base = os.path.basename(sp)
-            if not base.endswith(".lock"):
-                os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = base
+def hypr_socket_path():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    candidates = [
+        f"{xdg_runtime}/hypr/{sig}/.socket.sock",
+        f"/tmp/hypr/{sig}/.socket.sock",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    hypr_dir = f"{xdg_runtime}/hypr"
+    if os.path.isdir(hypr_dir):
+        for d in os.listdir(hypr_dir):
+            p = os.path.join(hypr_dir, d, ".socket.sock")
+            if os.path.exists(p):
+                return p
+    return None
+
+def ensure_hypr_env():
+    if "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
+        hypr_dir = f"{xdg_runtime}/hypr"
+        if os.path.isdir(hypr_dir):
+            sigs = [d for d in os.listdir(hypr_dir) if os.path.exists(os.path.join(hypr_dir, d, ".socket.sock"))]
+            if sigs:
+                sigs.sort(key=lambda s: os.path.getmtime(os.path.join(hypr_dir, s)), reverse=True)
+                os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = sigs[0]
+
+ensure_hypr_env()
+
+def hypr_socket_request(cmd):
+    p = hypr_socket_path()
+    if not p:
+        return None
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(0.3)
+        s.connect(p)
+        payload = (cmd if cmd.endswith("\n") else cmd + "\n").encode("utf-8")
+        s.sendall(payload)
+        chunks = []
+        while True:
+            chunk = s.recv(8192)
+            if not chunk:
                 break
+            chunks.append(chunk)
+        s.close()
+        return b"".join(chunks).decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+def run_hyprctl(args):
+    ensure_hypr_env()
+    try:
+        res = subprocess.run(["hyprctl"] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
+        return res.stdout
+    except Exception:
+        return ""
+
+def run_hypr_json(req):
+    res = hypr_socket_request(f"j/{req}")
+    if res:
+        try:
+            return json.loads(res)
+        except Exception:
+            pass
+    raw = run_hyprctl(["-j", req])
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+def hypr_dispatch(cmd):
+    res = hypr_socket_request(f"dispatch {cmd}")
+    if res is not None:
+        return res
+    return run_hyprctl(["dispatch"] + cmd.split())
 
 APP_MAP = {
     "kitty": ("󰞷", "Kitty"),
@@ -88,25 +155,6 @@ def resolve_app(app_class, title=""):
         return ("󰨞", app_class)
     return ("󰘔", app_class if app_class else "Application")
 
-def ensure_hypr_env():
-    if "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
-        hypr_dir = f"{xdg_runtime}/hypr"
-        if os.path.isdir(hypr_dir):
-            sigs = [d for d in os.listdir(hypr_dir) if os.path.exists(os.path.join(hypr_dir, d, ".socket.sock"))]
-            if sigs:
-                sigs.sort(key=lambda s: os.path.getmtime(os.path.join(hypr_dir, s)), reverse=True)
-                os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = sigs[0]
-
-ensure_hypr_env()
-
-def run_hyprctl(args):
-    ensure_hypr_env()
-    try:
-        res = subprocess.run(["hyprctl"] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
-        return res.stdout
-    except Exception:
-        return ""
-
 def get_current_buf():
     buf_file = f"/tmp/hypr_screen_{TARGET_UID}_buf"
     try:
@@ -123,10 +171,7 @@ def capture_screens():
     curr_buf = get_current_buf()
     next_buf = "2" if curr_buf == "1" else "1"
 
-    try:
-        monitors_raw = json.loads(run_hyprctl(["-j", "monitors"]))
-    except Exception:
-        monitors_raw = []
+    monitors_raw = run_hypr_json("monitors")
 
     def cap_mon(m):
         mname = m.get("name")
@@ -134,7 +179,8 @@ def capture_screens():
             return
         screen_file = f"/tmp/hypr_screen_{TARGET_UID}_{mname}_{next_buf}.png"
         try:
-            subprocess.run(["grim", "-s", "0.25", "-l", "1", "-o", mname, screen_file],
+            # -l 0 for 0 compression = instantaneous write like rust-dock
+            subprocess.run(["grim", "-s", "0.25", "-l", "0", "-t", "png", "-o", mname, screen_file],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=0.8)
             if os.getuid() == 0:
                 try:
@@ -161,26 +207,11 @@ def capture_screens():
     return next_buf
 
 def list_workspaces():
-    try:
-        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
-    except Exception:
-        ws_raw = []
-
-    try:
-        clients_raw = json.loads(run_hyprctl(["-j", "clients"]))
-    except Exception:
-        clients_raw = []
-
-    try:
-        monitors_raw = json.loads(run_hyprctl(["-j", "monitors"]))
-    except Exception:
-        monitors_raw = []
-
-    try:
-        active_ws_raw = json.loads(run_hyprctl(["-j", "activeworkspace"]))
-        active_id = active_ws_raw.get("id", 1)
-    except Exception:
-        active_id = 1
+    ws_raw = run_hypr_json("workspaces")
+    clients_raw = run_hypr_json("clients")
+    monitors_raw = run_hypr_json("monitors")
+    active_ws_raw = run_hypr_json("activeworkspace")
+    active_id = active_ws_raw.get("id", 1) if isinstance(active_ws_raw, dict) else 1
 
     mon_by_id = {m.get("id"): m for m in monitors_raw}
     mon_by_name = {m.get("name"): m for m in monitors_raw}
@@ -317,26 +348,14 @@ def collapse_island():
 
 def add_workspace(target_id=None):
     if target_id is None:
-        try:
-            ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
-            existing_ids = {w.get("id") for w in ws_raw if isinstance(w.get("id"), int) and w.get("id") > 0}
-        except Exception:
-            existing_ids = set()
-        
+        ws_raw = run_hypr_json("workspaces")
+        existing_ids = {w.get("id") for w in ws_raw if isinstance(w.get("id"), int) and w.get("id") > 0}
         cand = 1
         while cand in existing_ids:
             cand += 1
         target_id = cand
 
-    try:
-        wid = int(target_id)
-        lua_target = str(wid)
-    except ValueError:
-        lua_target = f"'{target_id}'"
-
-    res = run_hyprctl(["eval", f"hl.dispatch(hl.dsp.focus({{ workspace = {lua_target} }}))"])
-    if not res or "error" in res.lower():
-        run_hyprctl(["dispatch", "workspace", str(target_id)])
+    hypr_socket_request(f"dispatch workspace {target_id}")
     print(json.dumps({"status": "created", "id": target_id}))
 
 def remove_workspace(target_id):
@@ -346,13 +365,10 @@ def remove_workspace(target_id):
         print(json.dumps({"status": "error", "message": "invalid id"}))
         return
 
-    try:
-        clients_raw = json.loads(run_hyprctl(["-j", "clients"]))
-        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
-        active_ws_raw = json.loads(run_hyprctl(["-j", "activeworkspace"]))
-        active_id = active_ws_raw.get("id", 1)
-    except Exception:
-        clients_raw, ws_raw, active_id = [], [], 1
+    clients_raw = run_hypr_json("clients")
+    ws_raw = run_hypr_json("workspaces")
+    active_ws_raw = run_hypr_json("activeworkspace")
+    active_id = active_ws_raw.get("id", 1) if isinstance(active_ws_raw, dict) else 1
 
     closed = 0
     for c in clients_raw:
@@ -373,66 +389,26 @@ def remove_workspace(target_id):
 def switch_workspace(target_id):
     try:
         wid = int(target_id)
-        lua_target = str(wid)
     except ValueError:
         wid = target_id
-        lua_target = f"'{target_id}'"
 
     target_mon = None
-    try:
-        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
-        for w in ws_raw:
-            if str(w.get("id")) == str(wid):
-                target_mon = w.get("monitor")
-                break
-    except Exception:
-        pass
+    ws_raw = run_hypr_json("workspaces")
+    for w in ws_raw:
+        if str(w.get("id")) == str(wid):
+            target_mon = w.get("monitor")
+            break
 
     if target_mon:
-        run_hyprctl(["eval", f'hl.dispatch(hl.dsp.focus({{ monitor = "{target_mon}" }}))'])
+        hypr_socket_request(f"dispatch focusmonitor {target_mon}")
 
-    res = run_hyprctl(["eval", f"hl.dispatch(hl.dsp.focus({{ workspace = {lua_target} }}))"])
-    if not res or "error" in res.lower():
-        run_hyprctl(["dispatch", "workspace", str(target_id)])
+    hypr_socket_request(f"dispatch workspace {target_id}")
     collapse_island()
     print(json.dumps({"status": "switched", "id": target_id, "monitor": target_mon}))
 
-def focus_window(target_id, address):
-    try:
-        wid = int(target_id)
-        lua_target = str(wid)
-    except ValueError:
-        wid = target_id
-        lua_target = f"'{target_id}'"
-
-    target_mon = None
-    try:
-        ws_raw = json.loads(run_hyprctl(["-j", "workspaces"]))
-        for w in ws_raw:
-            if str(w.get("id")) == str(wid):
-                target_mon = w.get("monitor")
-                break
-    except Exception:
-        pass
-
-    if target_mon:
-        run_hyprctl(["eval", f'hl.dispatch(hl.dsp.focus({{ monitor = "{target_mon}" }}))'])
-
-    # 1. Switch workspace
-    run_hyprctl(["eval", f"hl.dispatch(hl.dsp.focus({{ workspace = {lua_target} }}))"])
-    # 2. Focus window
-    if address:
-        addr = address if address.startswith("address:") else f"address:{address}"
-        run_hyprctl(["eval", f"hl.dispatch(hl.dsp.focus({{ window = '{addr}' }}))"])
-    # 3. Collapse Dynamic Island to reveal window immediately
-    collapse_island()
-    print(json.dumps({"status": "focused", "id": target_id, "address": address}))
-
 def close_window(address):
     addr = address if address.startswith("address:") else f"address:{address}"
-    res = run_hyprctl(["eval", f"hl.dispatch(hl.dsp.window.close({{ window = '{addr}' }}))"])
-    if not res or "error" in res.lower():
-        run_hyprctl(["dispatch", "closewindow", addr])
+    hypr_socket_request(f"dispatch closewindow {addr}")
     print(json.dumps({"status": "closed", "address": address}))
 
 def is_overview_open(mon_name=""):
@@ -446,17 +422,14 @@ def is_overview_open(mon_name=""):
         return False
 
 def toggle_overview():
-    try:
-        mons = json.loads(run_hyprctl(["-j", "monitors"]))
-        focused_mon = None
-        for m in mons:
-            if m.get("focused"):
-                focused_mon = m.get("name")
-                break
-        if not focused_mon and mons:
-            focused_mon = mons[0].get("name")
-    except Exception:
-        focused_mon = ""
+    mons = run_hypr_json("monitors")
+    focused_mon = None
+    for m in mons:
+        if m.get("focused"):
+            focused_mon = m.get("name")
+            break
+    if not focused_mon and mons:
+        focused_mon = mons[0].get("name")
 
     qml_path = os.path.expanduser("~/.config/quickshell/waybar-island/shell.qml")
     cmd = ["quickshell", "ipc", "-p", qml_path, "--any-display", "call", "island", "toggleWorkspaces", focused_mon or ""]
