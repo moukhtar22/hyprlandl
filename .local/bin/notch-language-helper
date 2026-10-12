@@ -17,6 +17,14 @@ import socket
 import subprocess
 from pathlib import Path
 
+try:
+    from hyprland_languages.cache import get_cached_locales_and_layouts
+    from hyprland_languages.locales import generate_locale, search_locales, get_active_locale
+    from hyprland_languages.layouts import search_layouts, load_all_layouts
+    HAVE_HYPRLAND_LANGUAGES = True
+except ImportError:
+    HAVE_HYPRLAND_LANGUAGES = False
+
 POPULAR_LAYOUTS = [
     {"code": "us", "label": "English (US)"},
     {"code": "es", "label": "Spanish (Spain)"},
@@ -222,8 +230,22 @@ def get_locales_info():
     except Exception:
         pass
 
-    user_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == user_lang), user_lang)
-    sys_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == sys_lang), sys_lang)
+    user_label = user_lang
+    sys_label = sys_lang
+    if HAVE_HYPRLAND_LANGUAGES:
+        try:
+            locs, _ = get_cached_locales_and_layouts()
+            for l in locs:
+                if l.code == user_lang or l.code.replace(".UTF-8", ".utf8") == user_lang:
+                    user_label = l.display_name_es
+                if l.code == sys_lang or l.code.replace(".UTF-8", ".utf8") == sys_lang:
+                    sys_label = l.display_name_es
+        except Exception:
+            pass
+    if user_label == user_lang:
+        user_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == user_lang), user_lang)
+    if sys_label == sys_lang:
+        sys_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == sys_lang), sys_lang)
 
     return {
         "user_locale": user_lang,
@@ -300,6 +322,12 @@ def persist_hyprland_config(new_layouts_str=None, new_options_str=None):
             pass
 
 def ensure_locale_generated(loc):
+    if HAVE_HYPRLAND_LANGUAGES:
+        try:
+            ok, _ = generate_locale(loc)
+            return ok
+        except Exception:
+            pass
     try:
         out = subprocess.check_output(["locale", "-a"], text=True, timeout=2)
         clean = loc.lower().replace("-", "").replace(".", "")
@@ -559,9 +587,39 @@ def main():
         if len(sys.argv) > 2:
             set_system_locale(sys.argv[2])
     elif cmd == "available_layouts":
-        print(json.dumps(POPULAR_LAYOUTS))
+        if HAVE_HYPRLAND_LANGUAGES:
+            try:
+                _, lays = get_cached_locales_and_layouts()
+                out = []
+                for l in lays:
+                    out.append({
+                        "code": l.code,
+                        "label": f"{l.description} ({l.code})",
+                        "flag": l.flag
+                    })
+                print(json.dumps(out))
+            except Exception:
+                print(json.dumps(POPULAR_LAYOUTS))
+        else:
+            print(json.dumps(POPULAR_LAYOUTS))
     elif cmd == "available_locales":
-        print(json.dumps(POPULAR_LOCALES))
+        if HAVE_HYPRLAND_LANGUAGES:
+            try:
+                locs, _ = get_cached_locales_and_layouts()
+                out = []
+                for l in locs:
+                    if "utf-8" in l.charset.lower():
+                        out.append({
+                            "locale": l.code,
+                            "label": l.display_name_es,
+                            "flag": l.flag,
+                            "generated": l.generated
+                        })
+                print(json.dumps(out))
+            except Exception:
+                print(json.dumps(POPULAR_LOCALES))
+        else:
+            print(json.dumps(POPULAR_LOCALES))
     else:
         print(json.dumps({"status": "unknown_command"}))
 

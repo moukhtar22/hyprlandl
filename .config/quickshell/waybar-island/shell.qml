@@ -3289,15 +3289,21 @@ ShellRoot {
             focus: true
             property int navIndex: 0
             property int pickerNavIndex: 0
+            property var allLayoutsList: []
+            property var allLocalesList: []
+            readonly property var effectiveLayoutsList: (allLayoutsList && allLayoutsList.length > 0) ? allLayoutsList : popularLayoutsList
+            readonly property var effectiveLocalesList: (allLocalesList && allLocalesList.length > 0) ? allLocalesList : popularLocalesList
 
             readonly property var filteredLayouts: {
                 let q = layoutSearch.toLowerCase().trim()
-                return popularLayoutsList.filter(l => !q || l.label.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+                let list = effectiveLayoutsList.filter(l => !q || (l.label && l.label.toLowerCase().includes(q)) || (l.code && l.code.toLowerCase().includes(q)))
+                return list.slice(0, 80)
             }
 
             readonly property var filteredLocales: {
                 let q = localeSearch.toLowerCase().trim()
-                return popularLocalesList.filter(l => !q || l.label.toLowerCase().includes(q) || l.locale.toLowerCase().includes(q))
+                let list = effectiveLocalesList.filter(l => !q || (l.label && l.label.toLowerCase().includes(q)) || (l.locale && l.locale.toLowerCase().includes(q)))
+                return list.slice(0, 80)
             }
 
             function onArrowDown() {
@@ -3387,6 +3393,32 @@ ShellRoot {
                 event.accepted = true
             }
 
+            Process {
+                id: fetchAllLocalesProc
+                command: ["bash", "-c", "$HOME/.local/bin/notch-language-helper available_locales"]
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        try {
+                            const d = JSON.parse(text.trim())
+                            if (Array.isArray(d) && d.length > 0) langInputPanel.allLocalesList = d
+                        } catch(e) {}
+                    }
+                }
+            }
+
+            Process {
+                id: fetchAllLayoutsProc
+                command: ["bash", "-c", "$HOME/.local/bin/notch-language-helper available_layouts"]
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        try {
+                            const d = JSON.parse(text.trim())
+                            if (Array.isArray(d) && d.length > 0) langInputPanel.allLayoutsList = d
+                        } catch(e) {}
+                    }
+                }
+            }
+
             Connections {
                 target: islandWin
                 function onLangInputExpandedChanged() {
@@ -3395,6 +3427,12 @@ ShellRoot {
                         langInputPanel.pickerNavIndex = 0
                         langInputPanel.subView = 0
                         langInputPanel.forceActiveFocus()
+                        if (!langInputPanel.allLocalesList || langInputPanel.allLocalesList.length === 0) {
+                            fetchAllLocalesProc.running = true
+                        }
+                        if (!langInputPanel.allLayoutsList || langInputPanel.allLayoutsList.length === 0) {
+                            fetchAllLayoutsProc.running = true
+                        }
                     }
                 }
             }
@@ -3893,6 +3931,11 @@ ShellRoot {
                                         anchors.rightMargin: 10
                                         spacing: 8
 
+                                        Text {
+                                            text: modelData.flag ? modelData.flag : "⌨️"
+                                            font.pixelSize: 13
+                                        }
+
                                         Rectangle {
                                             height: 20
                                             implicitWidth: 40
@@ -4066,9 +4109,8 @@ ShellRoot {
                                         spacing: 8
 
                                         Text {
-                                            text: "󰗊"
+                                            text: modelData.flag ? modelData.flag : "󰗊"
                                             color: root.colAccent
-                                            font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 13
                                         }
 
