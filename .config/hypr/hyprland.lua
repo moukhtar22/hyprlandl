@@ -48,13 +48,13 @@ local background = "rgb(101012)"
 -- OJO: en esta versión los comodines en `output` no coinciden (`eDP-*` no hace
 -- nada), así que el panel interno va por su nombre exacto. Por lo mismo
 -- Regla general por defecto para cualquier monitor (laptop, desktop, VM)
-hl.monitor({
+pcall(hl.monitor, {
     output   = "",
     mode     = "preferred",
     position = "auto",
     scale    = "auto",
 })
-hl.monitor({
+pcall(hl.monitor, {
     output   = "eDP-1",
     mode     = "preferred",
     position = "auto",
@@ -123,54 +123,82 @@ local function aplicar_monitors_nwg()
 
                     if partes[idx] and partes[idx]:lower() == "disable" then
                         m.disabled = true
-                        m.mode = "disable"
-                    elseif partes[idx] and partes[idx]:lower() == "transform" and partes[idx + 1] then
+                    elseif partes[idx] and partes[idx]:lower() == "transform" and partes[idx + 1] and partes[idx + 1] ~= "" then
                         local t = tonumber(partes[idx + 1])
                         if t and t >= 0 and t <= 7 then
                             m.transform = t
                         end
+                        m.mode = "preferred"
+                        m.position = "auto"
+                        m.scale = "1"
                     else
-                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                            m.mode = partes[idx] ~= "" and partes[idx] or "preferred"
+                        if partes[idx] and partes[idx] ~= "" and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.mode = partes[idx]
                             idx = idx + 1
                         end
-                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                            m.position = partes[idx] ~= "" and partes[idx] or "auto"
+                        if partes[idx] and partes[idx] ~= "" and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.position = partes[idx]
                             idx = idx + 1
                         end
-                        if partes[idx] and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
-                            m.scale = partes[idx] ~= "" and partes[idx] or "1"
+                        if partes[idx] and partes[idx] ~= "" and partes[idx]:lower() ~= "transform" and partes[idx]:lower() ~= "vrr" and partes[idx]:lower() ~= "mirror" and partes[idx]:lower() ~= "bitdepth" and partes[idx]:lower() ~= "cm" then
+                            m.scale = partes[idx]
                             idx = idx + 1
                         end
 
                         while idx <= #partes do
-                            local clave = partes[idx]:lower()
-                            if clave == "transform" and partes[idx + 1] then
-                                local t = tonumber(partes[idx + 1])
-                                if t and t >= 0 and t <= 7 then m.transform = t end
-                                idx = idx + 2
-                            elseif clave == "vrr" and partes[idx + 1] then
-                                local v = tonumber(partes[idx + 1])
-                                if v then m.vrr = v end
-                                idx = idx + 2
-                            elseif clave == "mirror" and partes[idx + 1] then
-                                m.mirror = partes[idx + 1]
-                                idx = idx + 2
-                            elseif clave == "bitdepth" and partes[idx + 1] then
-                                local b = tonumber(partes[idx + 1])
-                                if b then m.bitdepth = b end
-                                idx = idx + 2
-                            elseif clave == "cm" and partes[idx + 1] then
-                                m.cm = partes[idx + 1]
-                                idx = idx + 2
-                            elseif clave == "vrr" then
-                                m.vrr = 1
-                                idx = idx + 1
-                            elseif clave:match("^%d+$") and tonumber(clave) >= 0 and tonumber(clave) <= 7 and not m.transform then
-                                m.transform = tonumber(clave)
+                            local token = partes[idx]
+                            if not token or token == "" then
                                 idx = idx + 1
                             else
-                                idx = idx + 1
+                                local clave = token:lower()
+                                if clave == "transform" then
+                                    local val = partes[idx + 1]
+                                    if val and val ~= "" then
+                                        local t = tonumber(val)
+                                        if t and t >= 0 and t <= 7 then m.transform = t end
+                                        idx = idx + 2
+                                    else
+                                        idx = idx + 1
+                                    end
+                                elseif clave == "vrr" then
+                                    local val = partes[idx + 1]
+                                    if val and val ~= "" and tonumber(val) then
+                                        m.vrr = tonumber(val)
+                                        idx = idx + 2
+                                    else
+                                        m.vrr = 1
+                                        idx = idx + 1
+                                    end
+                                elseif clave == "mirror" then
+                                    local val = partes[idx + 1]
+                                    if val and val ~= "" then
+                                        m.mirror = val
+                                        idx = idx + 2
+                                    else
+                                        idx = idx + 1
+                                    end
+                                elseif clave == "bitdepth" then
+                                    local val = partes[idx + 1]
+                                    if val and val ~= "" and tonumber(val) then
+                                        m.bitdepth = tonumber(val)
+                                        idx = idx + 2
+                                    else
+                                        idx = idx + 1
+                                    end
+                                elseif clave == "cm" then
+                                    local val = partes[idx + 1]
+                                    if val and val ~= "" then
+                                        m.cm = val
+                                        idx = idx + 2
+                                    else
+                                        idx = idx + 1
+                                    end
+                                elseif clave:match("^%d+$") and tonumber(clave) >= 0 and tonumber(clave) <= 7 and not m.transform then
+                                    m.transform = tonumber(clave)
+                                    idx = idx + 1
+                                else
+                                    idx = idx + 1
+                                end
                             end
                         end
                     end
@@ -184,26 +212,30 @@ local function aplicar_monitors_nwg()
         for _, nombre in ipairs(orden) do
             local regla = monitores[nombre]
             if regla.disabled then
-                pcall(hl.monitor, { output = regla.output or "", disabled = true, mode = "disable" })
+                pcall(hl.monitor, { output = regla.output or "", disabled = true })
             else
-                if not regla.mode or regla.mode == "" or regla.mode:lower() == "auto" then
-                    regla.mode = "preferred"
+                local m_call = {
+                    output = regla.output or "",
+                    mode = (regla.mode and regla.mode ~= "" and regla.mode:lower() ~= "auto" and regla.mode:lower() ~= "disable") and regla.mode or "preferred",
+                    position = (regla.position and regla.position ~= "" and not regla.position:match("^%d+$")) and regla.position or "auto",
+                    scale = (regla.scale and regla.scale ~= "") and regla.scale or "1"
+                }
+                if regla.transform and tonumber(regla.transform) then
+                    m_call.transform = tonumber(regla.transform)
                 end
-                if not regla.position or regla.position == "" or regla.position:match("^%d+%.?%d*$") then
-                    regla.position = "auto"
+                if regla.vrr and tonumber(regla.vrr) then
+                    m_call.vrr = tonumber(regla.vrr)
                 end
-                if not regla.scale or regla.scale == "" then
-                    regla.scale = "1"
+                if regla.mirror and regla.mirror ~= "" then
+                    m_call.mirror = regla.mirror
                 end
-                local ok, err = pcall(hl.monitor, regla)
-                if not ok then
-                    pcall(hl.monitor, {
-                        output = regla.output or "",
-                        mode = "preferred",
-                        position = "auto",
-                        scale = regla.scale or "1",
-                    })
+                if regla.bitdepth and tonumber(regla.bitdepth) then
+                    m_call.bitdepth = tonumber(regla.bitdepth)
                 end
+                if regla.cm and regla.cm ~= "" then
+                    m_call.cm = regla.cm
+                end
+                pcall(hl.monitor, m_call)
             end
         end
     else
