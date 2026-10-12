@@ -88,6 +88,11 @@ ShellRoot {
         }
         if (!panel) return "unavailable"
         root.islandVisible = true
+        if (screenName && screenName !== "all") {
+            let hs = Object.assign({}, root.hiddenScreens)
+            delete hs[screenName]
+            root.hiddenScreens = hs
+        }
         if (panel.sysMonExpanded) {
             panel.sysMonExpanded = false
             return "collapsed"

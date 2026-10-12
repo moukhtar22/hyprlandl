@@ -142,6 +142,15 @@ PanelWindow {
         Quickshell.execDetached(["bash", "-c", envInit + cmd])
     }
 
+    function toggleSysMon() {
+        const scrName = (barWin.screen && barWin.screen.name) ? barWin.screen.name : ""
+        if (barWin.islandRoot && typeof barWin.islandRoot.toggleSysMon === "function") {
+            barWin.islandRoot.toggleSysMon(scrName)
+        } else {
+            barWin.run("quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon '" + scrName + "'")
+        }
+    }
+
     // --- Timers & Processes ---
     // 1. Workspaces (Per-monitor active workspace) & Keymap
     Process {
@@ -513,7 +522,11 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("kitty -e btop")
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) barWin.run("kitty -e htop")
+                                else barWin.toggleSysMon()
+                            }
                         }
                     }
 
@@ -552,7 +565,11 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("kitty -e btop")
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) barWin.run("kitty -e htop")
+                                else barWin.toggleSysMon()
+                            }
                         }
                     }
 
@@ -585,7 +602,11 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("kitty -e btop")
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) barWin.run("kitty -e htop")
+                                else barWin.toggleSysMon()
+                            }
                         }
                     }
 
@@ -618,7 +639,11 @@ print(f\"{bars}|{overall_pct}\")
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: barWin.run("kitty -e nvtop 2>/dev/null || kitty -e btop")
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton) barWin.run("kitty -e htop")
+                                else barWin.toggleSysMon()
+                            }
                         }
                     }
                 }
