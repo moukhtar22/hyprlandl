@@ -1,0 +1,442 @@
+#!/usr/bin/env python3
+"""
+notch-language-helper: Backend for Language & Input management in Hyprland and Quickshell.
+Supports:
+  - Querying input layouts, active layout, switch shortcuts, and system/user locales.
+  - Adding, removing, and switching keyboard layouts in real time.
+  - Setting input switch hotkeys (XKB grp options).
+  - Setting user and system display languages.
+  - Persisting all changes to hyprland.lua, hyprland.conf, and environment configs.
+"""
+
+import os
+import sys
+import json
+import re
+import socket
+import subprocess
+from pathlib import Path
+
+POPULAR_LAYOUTS = [
+    {"code": "us", "label": "English (US)"},
+    {"code": "es", "label": "Spanish (Spain)"},
+    {"code": "latam", "label": "Spanish (Latin America)"},
+    {"code": "gb", "label": "English (UK)"},
+    {"code": "de", "label": "German"},
+    {"code": "fr", "label": "French"},
+    {"code": "it", "label": "Italian"},
+    {"code": "pt", "label": "Portuguese (Portugal)"},
+    {"code": "br", "label": "Portuguese (Brazil)"},
+    {"code": "ru", "label": "Russian"},
+    {"code": "jp", "label": "Japanese"},
+    {"code": "kr", "label": "Korean"},
+    {"code": "cn", "label": "Chinese"},
+    {"code": "ara", "label": "Arabic"},
+    {"code": "tr", "label": "Turkish"},
+    {"code": "pl", "label": "Polish"},
+    {"code": "nl", "label": "Dutch"},
+    {"code": "se", "label": "Swedish"},
+    {"code": "no", "label": "Norwegian"},
+    {"code": "dk", "label": "Danish"},
+    {"code": "fi", "label": "Finnish"},
+    {"code": "gr", "label": "Greek"},
+    {"code": "ua", "label": "Ukrainian"},
+    {"code": "cz", "label": "Czech"},
+    {"code": "ro", "label": "Romanian"},
+    {"code": "hu", "label": "Hungarian"},
+]
+
+POPULAR_LOCALES = [
+    {"locale": "en_US.UTF-8", "label": "English (United States)"},
+    {"locale": "es_ES.UTF-8", "label": "Español (España)"},
+    {"locale": "es_MX.UTF-8", "label": "Español (México)"},
+    {"locale": "en_GB.UTF-8", "label": "English (United Kingdom)"},
+    {"locale": "fr_FR.UTF-8", "label": "Français (France)"},
+    {"locale": "de_DE.UTF-8", "label": "Deutsch (Deutschland)"},
+    {"locale": "it_IT.UTF-8", "label": "Italiano (Italia)"},
+    {"locale": "pt_BR.UTF-8", "label": "Português (Brasil)"},
+    {"locale": "pt_PT.UTF-8", "label": "Português (Portugal)"},
+    {"locale": "ru_RU.UTF-8", "label": "Русский (Россия)"},
+    {"locale": "ja_JP.UTF-8", "label": "日本語 (日本)"},
+    {"locale": "zh_CN.UTF-8", "label": "中文 (简体)"},
+    {"locale": "C.UTF-8", "label": "English (Portable Unicode)"},
+]
+
+HOTKEYS = [
+    {"option": "", "label": "None", "keys": []},
+    {"option": "grp:alt_shift_toggle", "label": "Alt + Shift", "keys": ["Alt", "Shift"]},
+    {"option": "grp:win_space_toggle", "label": "Super + Space", "keys": ["Super", "Space"]},
+    {"option": "grp:ctrl_shift_toggle", "label": "Ctrl + Shift", "keys": ["Ctrl", "Shift"]},
+    {"option": "grp:ctrl_space_toggle", "label": "Ctrl + Space", "keys": ["Ctrl", "Space"]},
+    {"option": "grp:caps_toggle", "label": "Caps Lock", "keys": ["Caps Lock"]},
+    {"option": "grp:ctrl_alt_toggle", "label": "Ctrl + Alt", "keys": ["Ctrl", "Alt"]},
+]
+
+LAYOUT_NAMES = {
+    "us": "English (US)",
+    "es": "Spanish (Spain)",
+    "latam": "Spanish (Latin America)",
+    "gb": "English (UK)",
+    "de": "German",
+    "fr": "French",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "br": "Portuguese (Brazil)",
+    "ru": "Russian",
+    "jp": "Japanese",
+    "kr": "Korean",
+    "cn": "Chinese",
+    "ara": "Arabic",
+    "tr": "Turkish",
+    "pl": "Polish",
+    "nl": "Dutch",
+    "se": "Swedish",
+    "no": "Norwegian",
+    "dk": "Danish",
+    "fi": "Finnish",
+    "gr": "Greek",
+    "ua": "Ukrainian",
+    "cz": "Czech",
+    "ro": "Romanian",
+    "hu": "Hungarian",
+}
+
+def get_hypr_socket():
+    xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    if not sig:
+        hypr_dir = os.path.join(xdg_runtime, "hypr")
+        if os.path.isdir(hypr_dir):
+            sigs = [d for d in os.listdir(hypr_dir) if os.path.exists(os.path.join(hypr_dir, d, ".socket.sock"))]
+            if sigs:
+                sigs.sort(key=lambda s: os.path.getmtime(os.path.join(hypr_dir, s)), reverse=True)
+                sig = sigs[0]
+                os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = sig
+    if sig:
+        p = os.path.join(xdg_runtime, "hypr", sig, ".socket.sock")
+        if os.path.exists(p):
+            return p
+    return None
+
+def hypr_socket_request(cmd):
+    p = get_hypr_socket()
+    if not p:
+        return None
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(0.4)
+        s.connect(p)
+        payload = (cmd if cmd.endswith("\n") else cmd + "\n").encode("utf-8")
+        s.sendall(payload)
+        chunks = []
+        while True:
+            chunk = s.recv(8192)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        s.close()
+        return b"".join(chunks).decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+def hypr_eval(lua_code):
+    res = hypr_socket_request(f"eval {lua_code}")
+    if res and res.strip().startswith("ok"):
+        return True
+    return False
+
+def run_hyprctl(args):
+    try:
+        res = subprocess.run(["hyprctl"] + args, capture_output=True, text=True, timeout=2)
+        return res.stdout
+    except Exception:
+        return ""
+
+def get_devices():
+    res = hypr_socket_request("j/devices")
+    if res:
+        try:
+            return json.loads(res)
+        except Exception:
+            pass
+    raw = run_hyprctl(["-j", "devices"])
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+def get_primary_keyboard():
+    devs = get_devices()
+    kbs = devs.get("keyboards", [])
+    if not kbs:
+        return None
+    kb = next((k for k in kbs if k.get("name") == "at-translated-set-2-keyboard"), None)
+    if not kb:
+        kb = next((k for k in kbs if k.get("main")), None)
+    if not kb:
+        kb = next((k for k in kbs if k.get("layout")), kbs[0])
+    return kb
+
+def get_current_hotkey(options_str):
+    opts = [o.strip() for o in (options_str or "").split(",") if o.strip()]
+    grp_opt = next((o for o in opts if o.startswith("grp:")), "")
+    for h in HOTKEYS:
+        if h["option"] == grp_opt:
+            return h
+    if grp_opt:
+        label = grp_opt.replace("grp:", "").replace("_toggle", "").replace("_", " ").title()
+        return {"option": grp_opt, "label": label, "keys": [label]}
+    return HOTKEYS[0]
+
+def get_locales_info():
+    user_lang = os.environ.get("LANG", "C.UTF-8")
+    env_file = Path.home() / ".config/environment.d/10-locale.conf"
+    if env_file.exists():
+        try:
+            for line in env_file.read_text().splitlines():
+                if line.startswith("LANG="):
+                    user_lang = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        except Exception:
+            pass
+
+    sys_lang = user_lang
+    try:
+        out = subprocess.check_output(["localectl", "status"], text=True, timeout=1)
+        for line in out.splitlines():
+            if "System Locale:" in line and "LANG=" in line:
+                sys_lang = line.split("LANG=", 1)[1].split()[0].strip()
+                break
+    except Exception:
+        pass
+
+    user_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == user_lang), user_lang)
+    sys_label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == sys_lang), sys_lang)
+
+    return {
+        "user_locale": user_lang,
+        "user_locale_label": user_label,
+        "system_locale": sys_lang,
+        "system_locale_label": sys_label
+    }
+
+def get_status():
+    kb = get_primary_keyboard()
+    layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
+    active_idx = kb.get("active_layout_index", 0) if kb else 0
+    active_keymap = kb.get("active_keymap", "English (US)") if kb else "English (US)"
+    options_raw = kb.get("options", "") if kb else ""
+
+    layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+    if not layout_codes:
+        layout_codes = ["us"]
+
+    layouts_list = []
+    for idx, code in enumerate(layout_codes):
+        label = LAYOUT_NAMES.get(code, code.upper())
+        layouts_list.append({
+            "id": idx,
+            "code": code,
+            "code_upper": code.upper()[:5],
+            "label": label,
+            "active": (idx == active_idx)
+        })
+
+    hotkey = get_current_hotkey(options_raw)
+    loc_info = get_locales_info()
+
+    return {
+        "layouts": layouts_list,
+        "active_index": active_idx,
+        "active_code": (layout_codes[active_idx] if active_idx < len(layout_codes) else layout_codes[0]).upper(),
+        "active_name": active_keymap,
+        "current_hotkey": hotkey["label"],
+        "current_hotkey_keys": hotkey["keys"],
+        "hotkey_option": hotkey["option"],
+        "available_hotkeys": HOTKEYS,
+        "user_locale": loc_info["user_locale"],
+        "user_locale_label": loc_info["user_locale_label"],
+        "system_locale": loc_info["system_locale"],
+        "system_locale_label": loc_info["system_locale_label"]
+    }
+
+def persist_hyprland_config(new_layouts_str=None, new_options_str=None):
+    config_paths = [
+        Path.home() / ".config/hypr/hyprland.lua",
+        Path.home() / ".config/hypr/hyprland.conf",
+        Path.home() / "hyprland/.config/hypr/hyprland.lua",
+        Path.home() / "hyprland/.config/hypr/hyprland.conf",
+    ]
+
+    for p in config_paths:
+        if not p.exists():
+            continue
+        try:
+            content = p.read_text(encoding="utf-8")
+            if p.suffix == ".lua":
+                if new_layouts_str is not None:
+                    content = re.sub(r'kb_layout\s*=\s*"[^"]*"', f'kb_layout = "{new_layouts_str}"', content)
+                if new_options_str is not None:
+                    content = re.sub(r'kb_options\s*=\s*"[^"]*"', f'kb_options = "{new_options_str}"', content)
+            else:
+                if new_layouts_str is not None:
+                    content = re.sub(r'kb_layout\s*=\s*[^\n]*', f'kb_layout = {new_layouts_str}', content)
+                if new_options_str is not None:
+                    content = re.sub(r'kb_options\s*=\s*[^\n]*', f'kb_options = {new_options_str}', content)
+            p.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+
+def switch_layout(target):
+    kb = get_primary_keyboard()
+    layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
+    layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+
+    target_idx = 0
+    try:
+        target_idx = int(target)
+    except ValueError:
+        target_code = target.strip().lower()
+        if target_code in layout_codes:
+            target_idx = layout_codes.index(target_code)
+
+    if target_idx < 0 or target_idx >= len(layout_codes):
+        target_idx = 0
+
+    run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", str(target_idx)])
+    run_hyprctl(["switchxkblayout", "all", str(target_idx)])
+
+    notify_quickshell()
+    print(json.dumps({"status": "switched", "index": target_idx, "code": layout_codes[target_idx]}))
+
+def add_layout(code):
+    clean_code = code.strip().lower()
+    if not clean_code:
+        print(json.dumps({"status": "error", "message": "empty layout code"}))
+        return
+
+    kb = get_primary_keyboard()
+    layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
+    layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+
+    if clean_code in layout_codes:
+        print(json.dumps({"status": "already_present", "layouts": layout_codes}))
+        return
+
+    layout_codes.append(clean_code)
+    new_layouts_str = ",".join(layout_codes)
+
+    hypr_eval(f'hl.config({{ input = {{ kb_layout = "{new_layouts_str}" }} }})')
+    persist_hyprland_config(new_layouts_str=new_layouts_str)
+    notify_quickshell()
+    print(json.dumps({"status": "added", "code": clean_code, "layouts": layout_codes}))
+
+def remove_layout(target):
+    kb = get_primary_keyboard()
+    layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
+    layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+
+    if len(layout_codes) <= 1:
+        print(json.dumps({"status": "error", "message": "cannot remove last remaining layout"}))
+        return
+
+    target_code = None
+    try:
+        idx = int(target)
+        if 0 <= idx < len(layout_codes):
+            target_code = layout_codes[idx]
+    except ValueError:
+        target_code = target.strip().lower()
+
+    if target_code and target_code in layout_codes:
+        layout_codes.remove(target_code)
+        new_layouts_str = ",".join(layout_codes)
+        hypr_eval(f'hl.config({{ input = {{ kb_layout = "{new_layouts_str}" }} }})')
+        persist_hyprland_config(new_layouts_str=new_layouts_str)
+        run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", "0"])
+        notify_quickshell()
+        print(json.dumps({"status": "removed", "code": target_code, "layouts": layout_codes}))
+    else:
+        print(json.dumps({"status": "error", "message": "layout not found"}))
+
+def set_hotkey(option):
+    clean_option = option.strip()
+    kb = get_primary_keyboard()
+    curr_opts = (kb.get("options", "") if kb else "") or ""
+    other = [o for o in curr_opts.split(",") if o and not o.startswith("grp:")]
+    new_opts = ",".join(other + ([clean_option] if clean_option else []))
+
+    hypr_eval(f'hl.config({{ input = {{ kb_options = "{new_opts}" }} }})')
+    persist_hyprland_config(new_options_str=new_opts)
+    notify_quickshell()
+    print(json.dumps({"status": "hotkey_updated", "option": clean_option}))
+
+def set_user_locale(loc):
+    clean_loc = loc.strip()
+    if not clean_loc:
+        return
+    env_dir = Path.home() / ".config/environment.d"
+    env_dir.mkdir(parents=True, exist_ok=True)
+    env_file = env_dir / "10-locale.conf"
+    env_file.write_text(f'LANG="{clean_loc}"\nLC_MESSAGES="{clean_loc}"\n', encoding="utf-8")
+    notify_quickshell()
+    print(json.dumps({"status": "user_locale_updated", "locale": clean_loc}))
+
+def set_system_locale(loc):
+    clean_loc = loc.strip()
+    if not clean_loc:
+        return
+    try:
+        subprocess.run(["localectl", "set-locale", f"LANG={clean_loc}"], capture_output=True, timeout=3)
+    except Exception:
+        pass
+    set_user_locale(clean_loc)
+    print(json.dumps({"status": "system_locale_updated", "locale": clean_loc}))
+
+def notify_quickshell():
+    qml_path = os.path.expanduser("~/.config/quickshell/waybar-island/shell.qml")
+    cmd = ["quickshell", "ipc", "-p", qml_path, "--any-display", "call", "island", "reloadLanguage", ""]
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=0.8)
+    except Exception:
+        pass
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    if cmd == "status":
+        print(json.dumps(get_status()))
+    elif cmd == "switch":
+        if len(sys.argv) > 2:
+            switch_layout(sys.argv[2])
+        else:
+            run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", "next"])
+            notify_quickshell()
+            print(json.dumps({"status": "next"}))
+    elif cmd == "add":
+        if len(sys.argv) > 2:
+            add_layout(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "missing layout code"}))
+    elif cmd == "remove":
+        if len(sys.argv) > 2:
+            remove_layout(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "missing layout id"}))
+    elif cmd == "set_hotkey":
+        opt = sys.argv[2] if len(sys.argv) > 2 else ""
+        set_hotkey(opt)
+    elif cmd == "set_user_locale":
+        if len(sys.argv) > 2:
+            set_user_locale(sys.argv[2])
+    elif cmd == "set_system_locale":
+        if len(sys.argv) > 2:
+            set_system_locale(sys.argv[2])
+    elif cmd == "available_layouts":
+        print(json.dumps(POPULAR_LAYOUTS))
+    elif cmd == "available_locales":
+        print(json.dumps(POPULAR_LOCALES))
+    else:
+        print(json.dumps({"status": "unknown_command"}))
+
+if __name__ == "__main__":
+    main()
