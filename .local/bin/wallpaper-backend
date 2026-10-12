@@ -75,7 +75,7 @@ monitors() {
 
 ensure_daemon() {
     if command -v awww >/dev/null 2>&1; then
-        if ! pgrep -x "awww-daemon" >/dev/null 2>&1; then
+        if ! pgrep -x "awww-daemon" >/dev/null 2>&1 && ! awww query >/dev/null 2>&1; then
             setsid awww-daemon --format xrgb --no-cache >/dev/null 2>&1 &
             for _ in $(seq 1 50); do
                 awww query >/dev/null 2>&1 && break
@@ -83,7 +83,7 @@ ensure_daemon() {
             done
         fi
     elif command -v swww >/dev/null 2>&1; then
-        if ! pgrep -x "swww-daemon" >/dev/null 2>&1; then
+        if ! pgrep -x "swww-daemon" >/dev/null 2>&1 && ! swww query >/dev/null 2>&1; then
             setsid swww-daemon --format xrgb --no-cache >/dev/null 2>&1 &
             for _ in $(seq 1 50); do
                 swww query >/dev/null 2>&1 && break

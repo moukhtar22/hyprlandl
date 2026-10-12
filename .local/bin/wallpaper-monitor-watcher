@@ -103,19 +103,37 @@ repintar() {
 revision_periodica() {
     local seguidas=0
     local avisado=0
-    # Periodo de gracia inicial para permitir que el escritorio cargue limpiamente
-    sleep 15
+    local ultima_firma=""
+    local firma_inicio_tiempo=0
+
     while true; do
-        sleep 10
+        sleep 5
         resolver_entorno
-        if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        local sig="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+        if [ -z "$sig" ]; then
             if [ "$avisado" -eq 0 ]; then
                 log "AVISO: todavia no hay compositor; la revision periodica espera"
                 avisado=1
             fi
+            seguidas=0
             continue
         fi
         avisado=0
+
+        local ahora=$(date +%s)
+        if [ "$sig" != "$ultima_firma" ]; then
+            ultima_firma="$sig"
+            firma_inicio_tiempo=$ahora
+            seguidas=0
+            log "Nueva sesion de Hyprland ($sig). Periodo de gracia de inicio de 15s."
+            continue
+        fi
+
+        # Periodo de gracia inicial de 15 segundos para permitir que el escritorio cargue limpiamente
+        if [ $((ahora - firma_inicio_tiempo)) -lt 15 ]; then
+            continue
+        fi
+
         [ -x "$HOME/.local/bin/background-health" ] || continue
         roto=$("$HOME/.local/bin/background-health" 2>/dev/null)
         if [ -z "$roto" ]; then seguidas=0; continue; fi
@@ -138,15 +156,18 @@ while true; do
     resolver_entorno
     SOCKET=$(detect_socket)
     if [ -S "$SOCKET" ]; then
+        socket_connect_time=$(date +%s)
         socat -u "UNIX-CONNECT:$SOCKET" - 2>/dev/null | while read -r event; do
             case "$event" in
                 monitoradded*)
-                    sleep 1.0
+                    # Si el socket se conecto hace menos de 10s, es el arranque de Hyprland
+                    # donde el autostart ya pinta el fondo. Evitar tormenta de repintados al inicio.
+                    now=$(date +%s)
+                    if [ $((now - socket_connect_time)) -lt 10 ]; then
+                        continue
+                    fi
+                    sleep 2.0
                     repintar
-                    # Verificar que ha vuelto. Si a los pocos segundos sigue sin
-                    # fondo, queda escrito con fecha: antes el repintado iba a
-                    # >/dev/null y un fallo aqui no dejaba rastro, asi que "a
-                    # veces no vuelve" era indistinguible de "no se repinto".
                     ( sleep 8
                       resolver_entorno
                       roto=$("$HOME/.local/bin/background-health" 2>/dev/null)
@@ -154,11 +175,11 @@ while true; do
                     ) &
                     ;;
                 monitorremoved*)
-                    # Al desconectar un monitor, el compositor replantrea el
-                    # resto y sus superficies de fondo se pueden quedar en alfa
-                    # 0. Sin esto, al volver el escritorio se queda en
-                    # negro hasta que se cambia el fondo a mano.
-                    sleep 0.8
+                    now=$(date +%s)
+                    if [ $((now - socket_connect_time)) -lt 10 ]; then
+                        continue
+                    fi
+                    sleep 1.5
                     repintar
                     ( sleep 8
                       resolver_entorno

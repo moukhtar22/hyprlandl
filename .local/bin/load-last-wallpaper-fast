@@ -40,20 +40,12 @@ if [ -z "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
 fi
 
 # ── Exclusión mutua y debounce ───────────────────────────────────────────────
-LOCK_DIR="$XDG_RUNTIME_DIR/load-wallpaper-fast.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    lock_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
-        exit 0
-    fi
-    rm -rf "$LOCK_DIR" 2>/dev/null || true
-    mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+LOCK_FILE="$XDG_RUNTIME_DIR/load-wallpaper-fast.flock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    # Otra instancia de este script ya está aplicando el fondo
+    exit 0
 fi
-printf '%s\n' "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
-release_fast_lock() {
-    rm -rf "$LOCK_DIR" 2>/dev/null || true
-}
-trap release_fast_lock EXIT
 
 COOLDOWN_FILE="$XDG_RUNTIME_DIR/last-wallpaper-applied-timestamp"
 NOW=$(date +%s)
@@ -62,13 +54,10 @@ case "$LAST_APPLIED" in
     ''|*[!0-9]*) LAST_APPLIED=0 ;;
 esac
 
+# Evitar ráfagas y parpadeos: no re-aplicar si se acaba de aplicar hace menos de 4s.
+# La transición inicial dura ~2.2s; interrumpirla hace que el fondo parpadee y desaparezca.
 if [ $((NOW - LAST_APPLIED)) -lt 4 ]; then
-    if [ -x "$HOME/.local/bin/background-health" ]; then
-        roto=$("$HOME/.local/bin/background-health" 2>/dev/null || true)
-        if [ -z "$roto" ]; then
-            exit 0
-        fi
-    fi
+    exit 0
 fi
 
 # Verificación de daemon (soporta awww, swww, hyprpaper, swaybg)
@@ -155,13 +144,6 @@ is_already_displayed() {
     [ -n "$target" ] || return 1
     [ -f "$target" ] || return 1
 
-    # Si background-health indica que algún monitor no tiene fondo, toca pintar
-    if [ -x "$HOME/.local/bin/background-health" ]; then
-        local roto
-        roto=$("$HOME/.local/bin/background-health" 2>/dev/null || true)
-        [ -n "$roto" ] && return 1
-    fi
-
     if command -v awww >/dev/null 2>&1 && pgrep -x awww-daemon >/dev/null 2>&1; then
         local q total matching
         q=$(awww query 2>/dev/null || true)
@@ -169,6 +151,12 @@ is_already_displayed() {
         total=$(echo "$q" | grep -c "displaying:" || true)
         matching=$(echo "$q" | grep -F "image: $target" | grep -c "displaying:" || true)
         if [ "$total" -gt 0 ] && [ "$total" -eq "$matching" ]; then
+            # Solo repintar si background-health confirma que algún monitor perdió su capa (alfa 0)
+            if [ -x "$HOME/.local/bin/background-health" ]; then
+                local roto
+                roto=$("$HOME/.local/bin/background-health" 2>/dev/null || true)
+                [ -n "$roto" ] && return 1
+            fi
             return 0
         fi
     elif command -v swww >/dev/null 2>&1 && pgrep -x swww-daemon >/dev/null 2>&1; then
@@ -178,6 +166,11 @@ is_already_displayed() {
         total=$(echo "$q" | grep -c "displaying:" || true)
         matching=$(echo "$q" | grep -F "image: $target" | grep -c "displaying:" || true)
         if [ "$total" -gt 0 ] && [ "$total" -eq "$matching" ]; then
+            if [ -x "$HOME/.local/bin/background-health" ]; then
+                local roto
+                roto=$("$HOME/.local/bin/background-health" 2>/dev/null || true)
+                [ -n "$roto" ] && return 1
+            fi
             return 0
         fi
     fi
