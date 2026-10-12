@@ -1817,9 +1817,7 @@ ShellRoot {
 
         aboveWindows: true
         WlrLayershell.layer: WlrLayer.Overlay
-        // OnDemand keeps text inputs usable when focused without the expanded
-        // island swallowing Hyprland's global Super shortcuts.
-        WlrLayershell.keyboardFocus: (islandWin.expanded || islandWin.sysMonExpanded || islandWin.langInputExpanded) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: islandWin.langInputExpanded ? WlrKeyboardFocus.Exclusive : ((islandWin.expanded || islandWin.sysMonExpanded) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
 
         mask: Region {
             item: capsule
@@ -2762,6 +2760,119 @@ ShellRoot {
                 { locale: "C.UTF-8", label: "English (Portable Unicode)" }
             ]
 
+            focus: true
+            property int navIndex: 0
+            property int pickerNavIndex: 0
+
+            readonly property var filteredLayouts: {
+                let q = layoutSearch.toLowerCase().trim()
+                return popularLayoutsList.filter(l => !q || l.label.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+            }
+
+            readonly property var filteredLocales: {
+                let q = localeSearch.toLowerCase().trim()
+                return popularLocalesList.filter(l => !q || l.label.toLowerCase().includes(q) || l.locale.toLowerCase().includes(q))
+            }
+
+            function onArrowDown() {
+                if (subView === 0) {
+                    const total = (root.langData.layouts ? root.langData.layouts.length : 0) + 3
+                    navIndex = (navIndex + 1) % Math.max(1, total)
+                } else if (subView === 1) {
+                    const count = filteredLayouts.length
+                    if (count > 0) pickerNavIndex = (pickerNavIndex + 1) % count
+                } else if (subView === 2) {
+                    const count = filteredLocales.length
+                    if (count > 0) pickerNavIndex = (pickerNavIndex + 1) % count
+                }
+            }
+
+            function onArrowUp() {
+                if (subView === 0) {
+                    const total = (root.langData.layouts ? root.langData.layouts.length : 0) + 3
+                    navIndex = (navIndex - 1 + total) % Math.max(1, total)
+                } else if (subView === 1) {
+                    const count = filteredLayouts.length
+                    if (count > 0) pickerNavIndex = (pickerNavIndex - 1 + count) % count
+                } else if (subView === 2) {
+                    const count = filteredLocales.length
+                    if (count > 0) pickerNavIndex = (pickerNavIndex - 1 + count) % count
+                }
+            }
+
+            function onEnter() {
+                if (subView === 0) {
+                    const layouts = root.langData.layouts || []
+                    if (navIndex < layouts.length) {
+                        root.runCmd("$HOME/.local/bin/notch-language-helper switch " + layouts[navIndex].id)
+                        langRefreshTimer.restart()
+                    } else if (navIndex === layouts.length) {
+                        subView = 1
+                        layoutSearch = ""
+                        pickerNavIndex = 0
+                        layoutSearchInput.forceActiveFocus()
+                    } else if (navIndex === layouts.length + 1) {
+                        localeTarget = 0
+                        subView = 2
+                        localeSearch = ""
+                        pickerNavIndex = 0
+                        localeSearchInput.forceActiveFocus()
+                    } else if (navIndex === layouts.length + 2) {
+                        localeTarget = 1
+                        subView = 2
+                        localeSearch = ""
+                        pickerNavIndex = 0
+                        localeSearchInput.forceActiveFocus()
+                    }
+                } else if (subView === 1) {
+                    if (filteredLayouts.length > 0 && pickerNavIndex >= 0 && pickerNavIndex < filteredLayouts.length) {
+                        const item = filteredLayouts[pickerNavIndex]
+                        root.runCmd("$HOME/.local/bin/notch-language-helper add " + item.code)
+                        subView = 0
+                        langRefreshTimer.restart()
+                        forceActiveFocus()
+                    }
+                } else if (subView === 2) {
+                    if (filteredLocales.length > 0 && pickerNavIndex >= 0 && pickerNavIndex < filteredLocales.length) {
+                        const item = filteredLocales[pickerNavIndex]
+                        if (localeTarget === 1) {
+                            root.runCmd("$HOME/.local/bin/notch-language-helper set_system_locale '" + item.locale + "'")
+                        } else {
+                            root.runCmd("$HOME/.local/bin/notch-language-helper set_user_locale '" + item.locale + "'")
+                        }
+                        subView = 0
+                        langRefreshTimer.restart()
+                        forceActiveFocus()
+                    }
+                }
+            }
+
+            Keys.onDownPressed: event => { onArrowDown(); event.accepted = true; }
+            Keys.onUpPressed: event => { onArrowUp(); event.accepted = true; }
+            Keys.onReturnPressed: event => { onEnter(); event.accepted = true; }
+            Keys.onEnterPressed: event => { onEnter(); event.accepted = true; }
+            Keys.onEscapePressed: event => {
+                if (subView !== 0) {
+                    subView = 0
+                    forceActiveFocus()
+                } else {
+                    islandWin.langInputExpanded = false
+                }
+                event.accepted = true
+            }
+
+            Connections {
+                target: islandWin
+                function onLangInputExpandedChanged() {
+                    if (islandWin.langInputExpanded) {
+                        langInputPanel.navIndex = 0
+                        langInputPanel.pickerNavIndex = 0
+                        langInputPanel.subView = 0
+                        langInputPanel.forceActiveFocus()
+                    }
+                }
+            }
+
             ColumnLayout {
                 id: langInputCol
                 anchors.fill: parent
@@ -2849,12 +2960,13 @@ ShellRoot {
                         Repeater {
                             model: root.langData.layouts || []
                             delegate: Rectangle {
+                                readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === index)
                                 Layout.fillWidth: true
                                 height: 38
                                 radius: 8
-                                color: modelData.active ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15) : (rowHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.04))
-                                border.color: modelData.active ? root.colAccent : "transparent"
-                                border.width: 1
+                                color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.24) : (modelData.active ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15) : (rowHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.04)))
+                                border.color: isNavFocus ? root.colAccent : (modelData.active ? root.colAccent : "transparent")
+                                border.width: isNavFocus ? 2 : 1
 
                                 MouseArea {
                                     id: rowHover
@@ -2933,10 +3045,13 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0))
                             Layout.fillWidth: true
                             height: 32
                             radius: 6
-                            color: addLayoutHover.containsMouse ? Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08) : "transparent"
+                            color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (addLayoutHover.containsMouse ? Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08) : "transparent")
+                            border.color: isNavFocus ? root.colAccent : "transparent"
+                            border.width: isNavFocus ? 2 : 0
 
                             RowLayout {
                                 anchors.fill: parent
@@ -2944,7 +3059,7 @@ ShellRoot {
                                 spacing: 6
                                 Text {
                                     text: "+ Add keyboard layout"
-                                    color: addLayoutHover.containsMouse ? root.colAccent : root.colMuted
+                                    color: (isNavFocus || addLayoutHover.containsMouse) ? root.colAccent : root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
                                 }
@@ -3000,12 +3115,13 @@ ShellRoot {
                     }
 
                     Rectangle {
+                        readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0) + 1)
                         Layout.fillWidth: true
                         height: 34
                         radius: 8
-                        color: chgLangHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05)
-                        border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
-                        border.width: 1
+                        color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgLangHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
+                        border.color: isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                        border.width: isNavFocus ? 2 : 1
 
                         RowLayout {
                             anchors.fill: parent
@@ -3027,7 +3143,7 @@ ShellRoot {
                             }
                             Text {
                                 text: "󰁔"
-                                color: root.colMuted
+                                color: isNavFocus ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                             }
@@ -3047,12 +3163,13 @@ ShellRoot {
                     }
 
                     Rectangle {
+                        readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0) + 2)
                         Layout.fillWidth: true
                         height: 34
                         radius: 8
-                        color: chgSysHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05)
-                        border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
-                        border.width: 1
+                        color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgSysHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
+                        border.color: isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                        border.width: isNavFocus ? 2 : 1
 
                         RowLayout {
                             anchors.fill: parent
@@ -3074,7 +3191,7 @@ ShellRoot {
                             }
                             Text {
                                 text: "󰁔"
-                                color: root.colMuted
+                                color: isNavFocus ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                             }
@@ -3179,7 +3296,19 @@ ShellRoot {
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                                 clip: true
-                                onTextChanged: langInputPanel.layoutSearch = text
+                                onTextChanged: {
+                                    langInputPanel.layoutSearch = text
+                                    langInputPanel.pickerNavIndex = 0
+                                }
+                                Keys.onDownPressed: event => { langInputPanel.onArrowDown(); event.accepted = true; }
+                                Keys.onUpPressed: event => { langInputPanel.onArrowUp(); event.accepted = true; }
+                                Keys.onReturnPressed: event => { langInputPanel.onEnter(); event.accepted = true; }
+                                Keys.onEnterPressed: event => { langInputPanel.onEnter(); event.accepted = true; }
+                                Keys.onEscapePressed: event => {
+                                    langInputPanel.subView = 0
+                                    langInputPanel.forceActiveFocus()
+                                    event.accepted = true
+                                }
 
                                 Text {
                                     visible: !layoutSearchInput.text && !layoutSearchInput.activeFocus
@@ -3205,17 +3334,15 @@ ShellRoot {
                             spacing: 4
 
                             Repeater {
-                                model: {
-                                    let q = langInputPanel.layoutSearch.toLowerCase().trim()
-                                    return langInputPanel.popularLayoutsList.filter(l => {
-                                        return !q || l.label.toLowerCase().includes(q) || l.code.toLowerCase().includes(q)
-                                    })
-                                }
+                                model: langInputPanel.filteredLayouts
                                 delegate: Rectangle {
+                                    readonly property bool isNavFocus: (langInputPanel.subView === 1 && langInputPanel.pickerNavIndex === index)
                                     Layout.fillWidth: true
                                     height: 36
                                     radius: 6
-                                    color: pickLayoutHover.containsMouse ? root.colSurfaceHover : "transparent"
+                                    color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.22) : (pickLayoutHover.containsMouse ? root.colSurfaceHover : "transparent")
+                                    border.color: isNavFocus ? root.colAccent : "transparent"
+                                    border.width: isNavFocus ? 2 : 1
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -3341,7 +3468,19 @@ ShellRoot {
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                                 clip: true
-                                onTextChanged: langInputPanel.localeSearch = text
+                                onTextChanged: {
+                                    langInputPanel.localeSearch = text
+                                    langInputPanel.pickerNavIndex = 0
+                                }
+                                Keys.onDownPressed: event => { langInputPanel.onArrowDown(); event.accepted = true; }
+                                Keys.onUpPressed: event => { langInputPanel.onArrowUp(); event.accepted = true; }
+                                Keys.onReturnPressed: event => { langInputPanel.onEnter(); event.accepted = true; }
+                                Keys.onEnterPressed: event => { langInputPanel.onEnter(); event.accepted = true; }
+                                Keys.onEscapePressed: event => {
+                                    langInputPanel.subView = 0
+                                    langInputPanel.forceActiveFocus()
+                                    event.accepted = true
+                                }
 
                                 Text {
                                     visible: !localeSearchInput.text && !localeSearchInput.activeFocus
@@ -3367,17 +3506,15 @@ ShellRoot {
                             spacing: 4
 
                             Repeater {
-                                model: {
-                                    let q = langInputPanel.localeSearch.toLowerCase().trim()
-                                    return langInputPanel.popularLocalesList.filter(l => {
-                                        return !q || l.label.toLowerCase().includes(q) || l.locale.toLowerCase().includes(q)
-                                    })
-                                }
+                                model: langInputPanel.filteredLocales
                                 delegate: Rectangle {
+                                    readonly property bool isNavFocus: (langInputPanel.subView === 2 && langInputPanel.pickerNavIndex === index)
                                     Layout.fillWidth: true
                                     height: 38
                                     radius: 6
-                                    color: pickLocaleHover.containsMouse ? root.colSurfaceHover : "transparent"
+                                    color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.22) : (pickLocaleHover.containsMouse ? root.colSurfaceHover : "transparent")
+                                    border.color: isNavFocus ? root.colAccent : "transparent"
+                                    border.width: isNavFocus ? 2 : 1
 
                                     RowLayout {
                                         anchors.fill: parent

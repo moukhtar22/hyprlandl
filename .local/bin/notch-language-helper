@@ -321,15 +321,30 @@ def switch_layout(target):
     if target_idx < 0 or target_idx >= len(layout_codes):
         target_idx = 0
 
-    # Switch every detected keyboard to the target index
+    target_code = layout_codes[target_idx]
+
+    # Reorder layout list so selected layout is first (survives reboot natively)
+    reordered = [target_code] + [c for c in layout_codes if c != target_code]
+    reordered_str = ",".join(reordered)
+
+    hypr_eval(f'hl.config({{ input = {{ kb_layout = "{reordered_str}" }} }})')
+    persist_hyprland_config(new_layouts_str=reordered_str)
+
+    # Switch every detected keyboard to layout 0 (the new primary)
     for k in kbs:
         name = k.get("name")
         if name:
-            run_hyprctl(["switchxkblayout", name, str(target_idx)])
-    run_hyprctl(["switchxkblayout", "all", str(target_idx)])
+            run_hyprctl(["switchxkblayout", name, "0"])
+    run_hyprctl(["switchxkblayout", "all", "0"])
+
+    try:
+        state_file = Path.home() / ".config/hypr/active_layout"
+        state_file.write_text(target_code, encoding="utf-8")
+    except Exception:
+        pass
 
     notify_quickshell()
-    print(json.dumps({"status": "switched", "index": target_idx, "code": layout_codes[target_idx]}))
+    print(json.dumps({"status": "switched", "index": 0, "code": target_code, "layouts": reordered}))
 
 def add_layout(code):
     clean_code = code.strip().lower()
