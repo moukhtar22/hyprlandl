@@ -593,6 +593,7 @@ ShellRoot {
         otaChangelogProc.running = true
         gpuStatusProc.running = true
         workspacesProc.running = true
+        langProc.running = true
     }
 
     IpcHandler {
@@ -745,6 +746,18 @@ ShellRoot {
             if (!panel) return "unavailable"
             workspacesProc.running = true
             return "workspaces"
+        }
+        function openAlerts(screenName: string): string {
+            let panel = root.setPanelState(screenName, true, 2, 0)
+            if (!panel) return "unavailable"
+            root.notifUnread = 0
+            return "alerts"
+        }
+        function openClips(screenName: string): string {
+            let panel = root.setPanelState(screenName, true, 3, 0)
+            if (!panel) return "unavailable"
+            clipListProc.running = true
+            return "clips"
         }
         function toggleSysMon(screenName: string): string {
             return root.toggleSysMon(screenName)
@@ -1063,14 +1076,527 @@ ShellRoot {
         current_hotkey_keys: [],
         hotkey_option: "",
         available_hotkeys: [],
-        user_locale: "C.UTF-8",
-        user_locale_label: "English (Portable Unicode)",
-        system_locale: "C.UTF-8",
-        system_locale_label: "English (Portable Unicode)"
+        user_locale: "",
+        user_locale_label: "",
+        system_locale: "",
+        system_locale_label: ""
     })
+
+    // ── Internationalization (i18n) Engine ──
+    readonly property string currentLangCode: {
+        const envLoc = (Quickshell.env("LANG") || Quickshell.env("LC_ALL") || Quickshell.env("LC_MESSAGES") || "").toLowerCase()
+        let loc = (root.langData?.user_locale || root.langData?.system_locale || envLoc || "es_ES.UTF-8").toLowerCase()
+        if (loc === "c.utf-8" || loc === "c" || loc === "posix" || !loc) {
+            loc = envLoc || "es_ES.UTF-8"
+        }
+        if (loc.startsWith("es")) return "es"
+        if (loc.startsWith("fr")) return "fr"
+        if (loc.startsWith("de")) return "de"
+        if (loc.startsWith("it")) return "it"
+        if (loc.startsWith("pt")) return "pt"
+        if (loc.startsWith("ru")) return "ru"
+        if (loc.startsWith("ja")) return "ja"
+        if (loc.startsWith("zh")) return "zh"
+        return "en"
+    }
+
+    readonly property var i18nStrings: ({
+    "es": {
+        "nl_candle": "Vela",
+        "nl_warm": "Cálido",
+        "nl_balanced": "Equilibrado",
+        "nl_daylight": "Día",
+        "nl_optional_off": "Opcional · Desactivado",
+        "ota_last_checked": "Última comprobación:",
+        "ota_recently": "recientemente",
+        "ota_behind": "atrás",
+        "ota_loading_changelog": "Cargando registro de cambios...",
+        "audio_active_apps": "app(s) activas",
+        "bt_scanning_short": "Buscando cercanos...",
+        "bt_devices_avail": "dispositivos disponibles",
+        "bt_ready": "Listo para emparejar",
+        "bt_hide_unnamed": "Ocultar",
+        "bt_show_unnamed": "Mostrar",
+        "bt_unnamed_desc": "dispositivos sin nombre (beacons)",
+        "bat_devices": "dispositivos",
+        "sysmon_threads_active": "Hilos activos",
+        "sysmon_uptime": "Tiempo activo",
+        "sysmon_processor": "Procesador",
+        "sysmon_util": "Uso",
+        "mod_media_nothing": "Nada en reproducción",
+        "mod_wifi": "Wi-Fi",
+        "mod_wifi_enabled": "Activado",
+        "mod_wifi_disabled": "Desactivado",
+        "mod_wifi_connected": "Conectado",
+        "mod_bt": "Bluetooth",
+        "mod_bt_pairing": "Solicitud de emparejamiento pendiente",
+        "mod_bt_enabled": "Activado",
+        "mod_bt_disabled": "Desactivado",
+        "mod_dock": "Rust-Dock",
+        "mod_dock_enabled": "Activado · clic para ocultar",
+        "mod_dock_disabled": "Desactivado · clic para mostrar",
+        "mod_notif": "Notificaciones",
+        "mod_notif_unread": "sin leer",
+        "mod_notif_none": "Sin notificaciones pendientes",
+        "mod_nl": "Luz nocturna",
+        "mod_nl_inactive": "Inactivo",
+        "mod_caffeine_awake": "Modo despierto",
+        "mod_caffeine_sleep": "Reposo normal",
+        "mod_powersave_eco": "Eco activo",
+        "mod_powersave_disabled": "Desactivado",
+        "mod_perf": "Rendimiento",
+        "mod_perf_boost": "Turbo máximo",
+        "mod_perf_balanced": "Equilibrado",
+        "mod_dnd_silenced": "Silenciado",
+        "mod_dnd_sounds": "Sonidos activos",
+        "mod_audio_muted": "Silenciado",
+        "mod_record": "Grabar",
+        "wifi_hide": "Ocultar",
+        "wifi_show": "Mostrar",
+        "wifi_saved": "Guardada",
+        "bt_paired": "Emparejado",
+        "bt_available": "Disponible",
+        "bt_unnamed_device": "Dispositivo sin nombre",
+        "audio_sink_active": "Activo",
+        "audio_select": "Seleccionar",
+        "hypr_enabled": "Activado",
+        "hypr_disabled": "Desactivado",
+        "hypr_max_perf": "Máximo rendimiento",
+        "hypr_balanced": "Equilibrado",
+        "hypr_power_source": "Fuente de alimentación",
+        "hypr_batteries": "Baterías",
+        "bat_charging": "Cargando",
+        "bat_on_battery": "Con batería",
+        "bat_ac_online": "Red eléctrica conectada",
+        "bat_external_power": "Alimentación externa",
+        "ws_active": "Activo",
+        "ws_empty": "Espacio vacío",
+        "nl_enabled": "Activado",
+        "nl_disabled": "Desactivado",
+        "nl_active_desc": "Filtro de luz azul activo",
+        "nl_off_desc": "Filtro de luz azul apagado",
+        "nl_schedule_hint": "Desactivado por defecto. Configura ambas horas (HH:MM 24h) para activarlo.",
+        "nl_schedule_update": "Actualizar horario",
+        "nl_schedule_enable": "Activar horario",
+        "pair_waiting": "Esperando",
+        "pair_done": "Completado",
+        "pair_closed": "Cerrado",
+        "pair_pin": "Introduce el PIN",
+        "pair_auth": "Autorización",
+        "pair_code": "Código de confirmación",
+        "pair_none": "No hay solicitudes de emparejamiento pendientes.",
+        "ota_available": "Actualización del sistema disponible",
+        "ota_check": "Buscar actualizaciones",
+        "ota_install": "Descargar e instalar",
+        "ota_installing": "Instalando...",
+        "sysmon_title": "Monitor del sistema (htop)",
+        "sysmon_cli": "Terminal htop",
+        "sysmon_cpu": "CPU",
+        "sysmon_ram": "RAM",
+        "sysmon_swap": "Swap",
+        "sysmon_ssd": "SSD /",
+        "sysmon_cores": "Actividad de núcleos CPU",
+        "sysmon_gpu": "GPU:",
+        "sysmon_integrated_gpu": "Gráficos integrados estándar",
+        "sysmon_top_proc": "Procesos principales",
+        "sysmon_top_cpu": "Mayor CPU",
+        "sysmon_top_mem": "Mayor Memoria",
+        "sysmon_pid": "PID",
+        "sysmon_user": "USUARIO",
+        "sysmon_name": "NOMBRE",
+        "sysmon_kill": "MATAR",
+        "sysmon_kernel": "Núcleo: Linux ",
+        "sysmon_esc_close": "ESC o clic fuera para cerrar",
+        "lang_title": "Idioma y Entrada",
+        "lang_subtitle": "AJUSTES DE TECLADO E IDIOMA",
+        "lang_input_languages": "Distribuciones de teclado",
+        "lang_active": "Activo",
+        "lang_add_layout": "+ Añadir distribución de teclado",
+        "lang_system_language": "Idioma del sistema",
+        "lang_user_language": "Idioma de usuario actual:",
+        "lang_change_display": "Cambiar mi idioma de pantalla",
+        "lang_change_system": "Cambiar idioma del sistema (localectl)",
+        "lang_footer_nav": "↑/↓ Navegar • Enter Seleccionar • Esc Cerrar",
+        "lang_add_title": "Añadir distribución de teclado",
+        "lang_search_layout": "Buscar idioma o país...",
+        "lang_add_btn": "+ Añadir",
+        "lang_select_display": "Seleccionar idioma de pantalla",
+        "lang_select_system": "Seleccionar idioma del sistema (localectl)",
+        "lang_search_locale": "Buscar idioma o localización...",
+        "lang_select_btn": "Seleccionar",
+        "tab_control": "Control",
+        "tab_spaces": "Espacios",
+        "tab_hypr": "Hyprland",
+        "tab_alerts": "Alertas",
+        "tab_clips": "Portapapeles",
+        "mod_wifi": "Wi-Fi",
+        "mod_bluetooth": "Bluetooth",
+        "mod_audio": "Salida de audio",
+        "mod_rust_dock": "Rust-Dock",
+        "mod_notifications": "Notificaciones",
+        "mod_nightlight": "Luz nocturna",
+        "mod_caffeine": "Cafeína",
+        "mod_powersave": "Ahorro de energía",
+        "mod_performance": "Rendimiento",
+        "mod_dnd": "No molestar",
+        "mod_volume": "Volumen",
+        "mod_brightness": "Brillo",
+        "mod_picker": "Color",
+        "mod_gallery": "Galería",
+        "mod_random": "Aleatorio",
+        "mod_tasks": "Tareas",
+        "wifi_title": "Redes Wi-Fi disponibles",
+        "wifi_back": "Volver",
+        "wifi_connecting": "Conectando...",
+        "wifi_connected": "Conectado",
+        "wifi_disconnect": "Desconectar",
+        "wifi_connect": "Conectar",
+        "wifi_known": "Conocida",
+        "wifi_scanning": "Escaneando redes Wi-Fi...",
+        "wifi_none": "No se encontraron redes Wi-Fi.",
+        "wifi_settings": "Configuración de red",
+        "bt_title": "Dispositivos Bluetooth",
+        "bt_back": "Volver",
+        "bt_disabled_title": "Bluetooth desactivado",
+        "bt_disabled_desc": "Activa Bluetooth para buscar y conectar dispositivos cercanos",
+        "bt_turn_on": "Activar Bluetooth",
+        "bt_scanning": "Buscando dispositivos Bluetooth cercanos...",
+        "bt_none_found": "No se encontraron dispositivos. Haz clic en Buscar arriba.",
+        "bt_unnamed": "Dispositivo sin nombre",
+        "bt_connected": "Conectado",
+        "bt_disconnected": "Desconectado",
+        "bt_pair": "Emparejar",
+        "bt_disconnect": "Desconectar",
+        "bt_connect": "Conectar",
+        "bt_remove": "Olvidar",
+        "bt_manager": "Gestor de Bluetooth",
+        "audio_title": "Dispositivos de salida de audio",
+        "audio_back": "Volver",
+        "audio_none": "No se detectaron dispositivos de salida.",
+        "audio_mixer": "Mezclador de volumen de aplicaciones",
+        "audio_no_apps": "No hay aplicaciones reproduciendo audio.",
+        "audio_pavucontrol": "Control de volumen (Pavucontrol)",
+        "hypr_title": "Ajustes del compositor Hyprland",
+        "hypr_animations": "Animaciones",
+        "hypr_blur": "Desenfoque",
+        "hypr_shadows": "Sombras",
+        "hypr_perf": "Modo rendimiento",
+        "hypr_gpu_profile": "Perfil gráfico",
+        "hypr_gpu_integrated": "Integrada",
+        "hypr_gpu_igpu_only": "Solo iGPU",
+        "hypr_gpu_hybrid": "Híbrido",
+        "hypr_gpu_prime_auto": "PRIME automático",
+        "hypr_gpu_dedicated": "Dedicada",
+        "hypr_gpu_dgpu_only": "Solo dGPU",
+        "hypr_rounding": "Bordes redondeados:",
+        "hypr_gaps": "Espaciado (Gaps):",
+        "hypr_split": "Dividir división",
+        "hypr_reload": "Recargar",
+        "bat_ac_active": "Alimentación por CA activa",
+        "bat_power": "Potencia",
+        "bat_volt": "Voltaje",
+        "bat_health": "Salud",
+        "bat_full": "Capacidad",
+        "bat_cycles": "Ciclos",
+        "bat_limit": "Límite",
+        "notif_title": "Notificaciones",
+        "notif_back": "Volver",
+        "notif_clear": "Borrar todo",
+        "notif_tap_open": "Toca para abrir la aplicación",
+        "notif_muted_apps": "Aplicaciones silenciadas",
+        "notif_muted_desc": "Las notificaciones de aplicaciones silenciadas se descartan antes de llegar a la lista.",
+        "notif_empty": "No hay notificaciones aún.",
+        "clip_title": "Portapapeles",
+        "clip_clear": "Borrar todo",
+        "clip_empty": "Vacío: copia algo primero",
+        "ws_overview": "Vista de espacios de trabajo",
+        "ws_space": "Espacio",
+        "ws_add": "Añadir espacio",
+        "ws_footer": "Super + Tab alterna la vista • Clic para cambiar • 󰅖 elimina el espacio",
+        "nl_title": "Luz nocturna",
+        "nl_back": "Volver",
+        "nl_temp": "Temperatura de color",
+        "nl_temp_desc": "Valores bajos son más cálidos; valores altos son más neutros.",
+        "nl_gamma": "Gamma de pantalla",
+        "nl_gamma_desc": "Menor gamma atenúa la imagen; 100% es brillo normal.",
+        "nl_schedule": "Horario automático",
+        "nl_start": "Inicio",
+        "nl_end": "Fin",
+        "nl_disable": "Desactivar",
+        "nl_reset": "Restablecer valores · 4500 K · 100%",
+        "pair_title": "Solicitud de emparejamiento",
+        "pair_back": "Volver",
+        "pair_reject": "Rechazar",
+        "pair_confirm": "Confirmar",
+        "pair_empty": "No hay solicitudes de emparejamiento pendientes.",
+        "ota_title": "Actualización del sistema",
+        "ota_back": "Volver",
+        "ota_uptodate": "El sistema está actualizado",
+        "ota_checking": "Buscando actualizaciones...",
+        "ota_new": "Nueva actualización",
+        "ota_current": "Versión actual",
+        "ota_target": "Versión objetivo",
+        "ota_kernel": "Núcleo Linux",
+        "ota_channel": "Canal de lanzamiento",
+        "ota_changelog": "Registro de cambios e historial"
+    },
+    "en": {
+        "nl_candle": "Candle",
+        "nl_warm": "Warm",
+        "nl_balanced": "Balanced",
+        "nl_daylight": "Daylight",
+        "nl_optional_off": "Optional · Off",
+        "ota_last_checked": "Last checked:",
+        "ota_recently": "recently",
+        "ota_behind": "behind",
+        "ota_loading_changelog": "Loading changelog...",
+        "audio_active_apps": "active app(s)",
+        "bt_scanning_short": "Scanning nearby...",
+        "bt_devices_avail": "devices available",
+        "bt_ready": "Ready to pair",
+        "bt_hide_unnamed": "Hide",
+        "bt_show_unnamed": "Show",
+        "bt_unnamed_desc": "unnamed devices (beacons)",
+        "bat_devices": "devices",
+        "sysmon_threads_active": "Threads Active",
+        "sysmon_uptime": "Uptime",
+        "sysmon_processor": "Processor",
+        "sysmon_util": "Util",
+        "mod_media_nothing": "Nothing Playing",
+        "mod_wifi": "Wi-Fi",
+        "mod_wifi_enabled": "Enabled",
+        "mod_wifi_disabled": "Disabled",
+        "mod_wifi_connected": "Connected",
+        "mod_bt": "Bluetooth",
+        "mod_bt_pairing": "Pairing request pending",
+        "mod_bt_enabled": "Enabled",
+        "mod_bt_disabled": "Disabled",
+        "mod_dock": "Rust-Dock",
+        "mod_dock_enabled": "Enabled · click to hide",
+        "mod_dock_disabled": "Disabled · click to show",
+        "mod_notif": "Notifications",
+        "mod_notif_unread": "unread",
+        "mod_notif_none": "No unread",
+        "mod_nl": "Night Light",
+        "mod_nl_inactive": "Inactive",
+        "mod_caffeine_awake": "Awake Mode",
+        "mod_caffeine_sleep": "Normal Sleep",
+        "mod_powersave_eco": "Eco Active",
+        "mod_powersave_disabled": "Disabled",
+        "mod_perf": "Performance",
+        "mod_perf_boost": "Max Boost",
+        "mod_perf_balanced": "Balanced",
+        "mod_dnd_silenced": "Silenced",
+        "mod_dnd_sounds": "Sounds On",
+        "mod_audio_muted": "Muted",
+        "mod_record": "Record",
+        "wifi_hide": "Hide",
+        "wifi_show": "Show",
+        "wifi_saved": "Saved",
+        "bt_paired": "Paired",
+        "bt_available": "Available",
+        "bt_unnamed_device": "Unnamed Device",
+        "audio_sink_active": "Active",
+        "audio_select": "Select",
+        "hypr_enabled": "Enabled",
+        "hypr_disabled": "Disabled",
+        "hypr_max_perf": "Max Performance",
+        "hypr_balanced": "Balanced",
+        "hypr_power_source": "Power Source",
+        "hypr_batteries": "Batteries",
+        "bat_charging": "Charging",
+        "bat_on_battery": "On battery",
+        "bat_ac_online": "AC Mains Online",
+        "bat_external_power": "External Power",
+        "ws_active": "Active",
+        "ws_empty": "Empty Space",
+        "nl_enabled": "Enabled",
+        "nl_disabled": "Disabled",
+        "nl_active_desc": "Blue-light filter is active",
+        "nl_off_desc": "Blue-light filter is off",
+        "nl_schedule_hint": "Off by default. Set both times (24-hour HH:MM) to enable.",
+        "nl_schedule_update": "Update schedule",
+        "nl_schedule_enable": "Enable schedule",
+        "pair_waiting": "Waiting",
+        "pair_done": "Done",
+        "pair_closed": "Closed",
+        "pair_pin": "Enter the PIN",
+        "pair_auth": "Authorization",
+        "pair_code": "Confirmation code",
+        "pair_none": "No pending pairing request.",
+        "ota_available": "System Update Available",
+        "ota_check": "Check for update",
+        "ota_install": "Download & Install",
+        "ota_installing": "Installing...",
+        "sysmon_title": "System Monitor (htop)",
+        "sysmon_cli": "htop CLI",
+        "sysmon_cpu": "CPU",
+        "sysmon_ram": "RAM",
+        "sysmon_swap": "Swap",
+        "sysmon_ssd": "SSD /",
+        "sysmon_cores": "CPU Cores Activity",
+        "sysmon_gpu": "GPU:",
+        "sysmon_integrated_gpu": "Standard Integrated Graphics",
+        "sysmon_top_proc": "Top Processes",
+        "sysmon_top_cpu": "Top CPU",
+        "sysmon_top_mem": "Top Memory",
+        "sysmon_pid": "PID",
+        "sysmon_user": "USER",
+        "sysmon_name": "NAME",
+        "sysmon_kill": "KILL",
+        "sysmon_kernel": "Kernel: Linux ",
+        "sysmon_esc_close": "ESC or click outside to close",
+        "lang_title": "Language & Input",
+        "lang_subtitle": "KEYBOARD AND LANGUAGE SETTINGS",
+        "lang_input_languages": "Input Languages",
+        "lang_active": "Active",
+        "lang_add_layout": "+ Add keyboard layout",
+        "lang_system_language": "System Language",
+        "lang_user_language": "Current User Language:",
+        "lang_change_display": "Change my display language",
+        "lang_change_system": "Change system language (localectl)",
+        "lang_footer_nav": "↑/↓ Navigate • Enter Select • Esc Close",
+        "lang_add_title": "Add Keyboard Layout",
+        "lang_search_layout": "Search language or country...",
+        "lang_add_btn": "+ Add",
+        "lang_select_display": "Select Display Language",
+        "lang_select_system": "Select System Language (localectl)",
+        "lang_search_locale": "Search language or locale...",
+        "lang_select_btn": "Select",
+        "tab_control": "Control",
+        "tab_spaces": "Spaces",
+        "tab_hypr": "Hypr",
+        "tab_alerts": "Alerts",
+        "tab_clips": "Clips",
+        "mod_wifi": "Wi-Fi",
+        "mod_bluetooth": "Bluetooth",
+        "mod_audio": "Audio Output",
+        "mod_rust_dock": "Rust-Dock",
+        "mod_notifications": "Notifications",
+        "mod_nightlight": "Night Light",
+        "mod_caffeine": "Caffeine",
+        "mod_powersave": "Power Saver",
+        "mod_performance": "Performance",
+        "mod_dnd": "Do Not Disturb",
+        "mod_volume": "Volume",
+        "mod_brightness": "Brightness",
+        "mod_picker": "Picker",
+        "mod_gallery": "Gallery",
+        "mod_random": "Random",
+        "mod_tasks": "Tasks",
+        "wifi_title": "Available Wi-Fi Networks",
+        "wifi_back": "Back",
+        "wifi_connecting": "Connecting...",
+        "wifi_connected": "Connected",
+        "wifi_disconnect": "Disconnect",
+        "wifi_connect": "Connect",
+        "wifi_known": "Known",
+        "wifi_scanning": "Scanning Wi-Fi networks...",
+        "wifi_none": "No Wi-Fi networks found.",
+        "wifi_settings": "Open Network Settings",
+        "bt_title": "Bluetooth Devices",
+        "bt_back": "Back",
+        "bt_disabled_title": "Bluetooth is Disabled",
+        "bt_disabled_desc": "Turn on Bluetooth to discover and connect nearby devices",
+        "bt_turn_on": "Turn On Bluetooth",
+        "bt_scanning": "Scanning nearby Bluetooth devices...",
+        "bt_none_found": "No paired or named devices found. Click Scan above.",
+        "bt_unnamed": "Unnamed Device",
+        "bt_connected": "Connected",
+        "bt_disconnected": "Disconnected",
+        "bt_pair": "Pair",
+        "bt_disconnect": "Disconnect",
+        "bt_connect": "Connect",
+        "bt_remove": "Remove",
+        "bt_manager": "Open Bluetooth Manager",
+        "audio_title": "Audio Output Devices",
+        "audio_back": "Back",
+        "audio_none": "No audio output devices detected.",
+        "audio_mixer": "Application Volume Mixer",
+        "audio_no_apps": "No active application audio streams.",
+        "audio_pavucontrol": "Open Audio Settings (Pavucontrol)",
+        "hypr_title": "Real-time Hyprland Compositor Settings",
+        "hypr_animations": "Animations",
+        "hypr_blur": "Blur Effect",
+        "hypr_shadows": "Shadows",
+        "hypr_perf": "Performance",
+        "hypr_gpu_profile": "Graphics Profile",
+        "hypr_gpu_integrated": "Integrated",
+        "hypr_gpu_igpu_only": "iGPU Only",
+        "hypr_gpu_hybrid": "Hybrid",
+        "hypr_gpu_prime_auto": "PRIME Auto",
+        "hypr_gpu_dedicated": "Dedicated",
+        "hypr_gpu_dgpu_only": "dGPU Only",
+        "hypr_rounding": "Rounding:",
+        "hypr_gaps": "Gaps:",
+        "hypr_split": "Split Layout",
+        "hypr_reload": "Reload",
+        "bat_ac_active": "Direct Power Supply Active",
+        "bat_power": "Power",
+        "bat_volt": "Volt",
+        "bat_health": "Health",
+        "bat_full": "Full",
+        "bat_cycles": "Cycles",
+        "bat_limit": "Limit",
+        "notif_title": "Notifications",
+        "notif_back": "Back",
+        "notif_clear": "Clear all",
+        "notif_tap_open": "Tap to open app",
+        "notif_muted_apps": "Muted apps",
+        "notif_muted_desc": "Notifications from muted apps are discarded before they reach the list.",
+        "notif_empty": "No notifications yet.",
+        "clip_title": "Clipboard",
+        "clip_clear": "Clear all",
+        "clip_empty": "Empty: copy something first",
+        "ws_overview": "Workspaces Overview",
+        "ws_space": "Space",
+        "ws_add": "Add Space",
+        "ws_footer": "Super + Tab toggles Overview • Click card to switch • 󰅖 removes space",
+        "nl_title": "Night Light",
+        "nl_back": "Back",
+        "nl_temp": "Color temperature",
+        "nl_temp_desc": "Lower values are warmer; higher values look more neutral.",
+        "nl_gamma": "Display gamma",
+        "nl_gamma_desc": "Lower gamma dims the image; 100% is normal brightness.",
+        "nl_schedule": "Automatic schedule",
+        "nl_start": "Start",
+        "nl_end": "End",
+        "nl_disable": "Disable",
+        "nl_reset": "Reset defaults · 4500 K · 100%",
+        "pair_title": "Pairing Request",
+        "pair_back": "Back",
+        "pair_reject": "Reject",
+        "pair_confirm": "Confirm",
+        "pair_empty": "No pending pairing request.",
+        "ota_title": "System Update",
+        "ota_back": "Back",
+        "ota_uptodate": "System is up to date",
+        "ota_checking": "Checking for updates...",
+        "ota_new": "New Update",
+        "ota_current": "Current Version",
+        "ota_target": "Target Release",
+        "ota_kernel": "Linux Kernel",
+        "ota_channel": "Release Channel",
+        "ota_changelog": "Changelog & History"
+    }
+})
+
+    function t(key, fallback) {
+        if (!key) return fallback !== undefined ? fallback : ""
+        const lang = root.currentLangCode
+        if (root.i18nStrings && root.i18nStrings[lang] && root.i18nStrings[lang][key] !== undefined) {
+            return root.i18nStrings[lang][key]
+        }
+        if (root.i18nStrings && root.i18nStrings["en"] && root.i18nStrings["en"][key] !== undefined) {
+            return root.i18nStrings["en"][key]
+        }
+        return fallback !== undefined ? fallback : key
+    }
+
 
     Process {
         id: langProc
+        running: true
         command: ["bash", "-c", "$HOME/.local/bin/notch-language-helper status"]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -2011,7 +2537,7 @@ ShellRoot {
                         spacing: 1
 
                         Text {
-                            text: "System Monitor (htop)"
+                            text: root.t("sysmon_title", "System Monitor (htop)")
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 13
@@ -2019,7 +2545,7 @@ ShellRoot {
                         }
 
                         Text {
-                            text: (root.sysMonData?.cpu?.model || "Processor") + " · Uptime: " + (root.sysMonData?.system?.uptime || "0m")
+                            text: (root.sysMonData?.cpu?.model || root.t("sysmon_processor", "Processor")) + " · " + root.t("sysmon_uptime", "Uptime") + ": " + (root.sysMonData?.system?.uptime || "0m")
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 9
@@ -2048,7 +2574,7 @@ ShellRoot {
                                 font.pixelSize: 12
                             }
                             Text {
-                                text: "htop CLI"
+                                text: root.t("sysmon_cli", "htop CLI")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 9
@@ -2314,7 +2840,7 @@ ShellRoot {
                         RowLayout {
                             Layout.fillWidth: true
                             Text {
-                                text: "CPU Cores Activity"
+                                text: root.t("sysmon_cores", "CPU Cores Activity")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 9
@@ -2322,7 +2848,7 @@ ShellRoot {
                             }
                             Item { Layout.fillWidth: true }
                             Text {
-                                text: (root.sysMonData?.cpu?.cores_count ?? 16) + " Threads Active"
+                                text: (root.sysMonData?.cpu?.cores_count ?? 16) + " " + root.t("sysmon_threads_active", "Threads Active")
                                 color: root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 8
@@ -2396,7 +2922,7 @@ ShellRoot {
 
                         Text { text: "󰢮"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
                         Text {
-                            text: "GPU:"
+                            text: root.t("sysmon_gpu", "GPU:")
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 9
@@ -2438,7 +2964,7 @@ ShellRoot {
 
                                         Text {
                                             visible: (modelData.util_pct ?? 0) > 0 || modelData.has_util
-                                            text: "· " + modelData.util_pct + "% Util"
+                                            text: "· " + modelData.util_pct + "% " + root.t("sysmon_util", "Util")
                                             color: root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 8
@@ -2458,7 +2984,7 @@ ShellRoot {
 
                         Text {
                             visible: (root.sysMonData?.gpu?.devices?.length ?? 0) === 0
-                            text: "Standard Integrated Graphics"
+                            text: root.t("sysmon_integrated_gpu", "Standard Integrated Graphics")
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 8
@@ -2480,7 +3006,7 @@ ShellRoot {
                         spacing: 8
 
                         Text {
-                            text: "Top Processes"
+                            text: root.t("sysmon_top_proc", "Top Processes")
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 11
@@ -2498,7 +3024,7 @@ ShellRoot {
                             Behavior on color { ColorAnimation { duration: 150 } }
                             Text {
                                 anchors.centerIn: parent
-                                text: "Top CPU"
+                                text: root.t("sysmon_top_cpu", "Top CPU")
                                 color: islandWin.sysMonProcTab === "cpu" ? root.colBg : root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 8
@@ -2520,7 +3046,7 @@ ShellRoot {
                             Behavior on color { ColorAnimation { duration: 150 } }
                             Text {
                                 anchors.centerIn: parent
-                                text: "Top Memory"
+                                text: root.t("sysmon_top_mem", "Top Memory")
                                 color: islandWin.sysMonProcTab === "mem" ? root.colBg : root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 8
@@ -2541,12 +3067,12 @@ ShellRoot {
                         Layout.rightMargin: 8
                         spacing: 8
 
-                        Text { text: "PID"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 48 }
-                        Text { text: "USER"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 50 }
-                        Text { text: "NAME"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.fillWidth: true }
+                        Text { text: root.t("sysmon_pid", "PID"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 48 }
+                        Text { text: root.t("sysmon_user", "USER"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 50 }
+                        Text { text: root.t("sysmon_name", "NAME"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.fillWidth: true }
                         Text { text: "CPU"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 42; horizontalAlignment: Text.AlignRight }
                         Text { text: "RAM"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 70; horizontalAlignment: Text.AlignRight }
-                        Text { text: "KILL"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 28; horizontalAlignment: Text.AlignCenter }
+                        Text { text: root.t("sysmon_kill", "KILL"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8; Layout.preferredWidth: 28; horizontalAlignment: Text.AlignCenter }
                     }
 
                     // Lista de 6 Procesos
@@ -2661,7 +3187,7 @@ ShellRoot {
                     spacing: 8
 
                     Text {
-                        text: "Kernel: Linux " + (root.sysMonData?.system?.kernel || "")
+                        text: root.t("sysmon_kernel", "Kernel: Linux") + " " + (root.sysMonData?.system?.kernel || "")
                         color: root.colMuted
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 8
@@ -2670,7 +3196,7 @@ ShellRoot {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: "ESC or click outside to close"
+                        text: root.t("sysmon_esc_close", "ESC or click outside to close")
                         color: Qt.rgba(root.colMuted.r, root.colMuted.g, root.colMuted.b, 0.6)
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 8
@@ -2907,7 +3433,7 @@ ShellRoot {
                                 font.weight: Font.Bold
                             }
                             Text {
-                                text: "KEYBOARD AND LANGUAGE SETTINGS"
+                                text: root.t("lang_title", "KEYBOARD AND LANGUAGE SETTINGS")
                                 color: root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 9
@@ -2946,7 +3472,7 @@ ShellRoot {
 
                     // 2. Input Languages Section
                     Text {
-                        text: "Input Languages"
+                        text: root.t("lang_input_languages", "Input Languages")
                         color: root.colMuted
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 11
@@ -3010,7 +3536,7 @@ ShellRoot {
                                         color: root.colAccent
                                         Text {
                                             anchors.centerIn: parent
-                                            text: "Active"
+                                            text: root.t("lang_active", "Active")
                                             color: root.colBg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -3058,7 +3584,7 @@ ShellRoot {
                                 anchors.leftMargin: 12
                                 spacing: 6
                                 Text {
-                                    text: "+ Add keyboard layout"
+                                    text: root.t("lang_add_layout", "+ Add keyboard layout")
                                     color: (isNavFocus || addLayoutHover.containsMouse) ? root.colAccent : root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -3087,7 +3613,7 @@ ShellRoot {
 
                     // 3. System Language Section
                     Text {
-                        text: "System Language"
+                        text: root.t("lang_system_language", "System Language")
                         color: root.colMuted
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 11
@@ -3098,7 +3624,7 @@ ShellRoot {
                         Layout.fillWidth: true
                         spacing: 6
                         Text {
-                            text: "Current User Language:"
+                            text: root.t("lang_user_language", "Current User Language:")
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 11
@@ -3135,7 +3661,7 @@ ShellRoot {
                                 font.pixelSize: 13
                             }
                             Text {
-                                text: "Change my display language"
+                                text: root.t("lang_change_display", "Change my display language")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
@@ -3183,7 +3709,7 @@ ShellRoot {
                                 font.pixelSize: 13
                             }
                             Text {
-                                text: "Change system language (localectl)"
+                                text: root.t("lang_change_system", "Change system language (localectl)")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
@@ -3220,7 +3746,7 @@ ShellRoot {
                     // 5. Footer Shortcuts
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "↑/↓ Navigate • Enter Select • Esc Close"
+                        text: root.t("lang_footer_nav", "↑/↓ Navigate • Enter Select • Esc Close")
                         color: root.colMuted
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: 9
@@ -3257,7 +3783,7 @@ ShellRoot {
                         }
 
                         Text {
-                            text: "Add Keyboard Layout"
+                            text: root.t("lang_add_title", "Add Keyboard Layout")
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 14
@@ -3312,7 +3838,7 @@ ShellRoot {
 
                                 Text {
                                     visible: !layoutSearchInput.text && !layoutSearchInput.activeFocus
-                                    text: "Search language or country..."
+                                    text: root.t("lang_search_layout", "Search language or country...")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -3374,7 +3900,7 @@ ShellRoot {
                                         }
 
                                         Text {
-                                            text: "+ Add"
+                                            text: root.t("lang_add_btn", "+ Add")
                                             color: pickLayoutHover.containsMouse ? root.colAccent : "transparent"
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10
@@ -3429,7 +3955,7 @@ ShellRoot {
                         }
 
                         Text {
-                            text: langInputPanel.localeTarget === 1 ? "Select System Language (localectl)" : "Select Display Language"
+                            text: langInputPanel.localeTarget === 1 ? root.t("lang_select_system", "Select System Language (localectl)") : root.t("lang_select_display", "Select Display Language")
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 14
@@ -3484,7 +4010,7 @@ ShellRoot {
 
                                 Text {
                                     visible: !localeSearchInput.text && !localeSearchInput.activeFocus
-                                    text: "Search language or locale..."
+                                    text: root.t("lang_search_locale", "Search language or locale...")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -3548,7 +4074,7 @@ ShellRoot {
                                         }
 
                                         Text {
-                                            text: "Select"
+                                            text: root.t("lang_select_btn", "Select")
                                             color: pickLocaleHover.containsMouse ? root.colAccent : "transparent"
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10
@@ -4197,7 +4723,7 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Control"
+                                    text: root.t("tab_control", "Control")
                                     color: islandWin.currentTab === 0 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -4233,7 +4759,7 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Spaces"
+                                    text: root.t("tab_spaces", "Spaces")
                                     color: islandWin.currentTab === 4 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -4270,7 +4796,7 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Hypr"
+                                    text: root.t("tab_hypr", "Hypr")
                                     color: islandWin.currentTab === 1 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -4306,7 +4832,7 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Alerts"
+                                    text: root.t("tab_alerts", "Alerts")
                                     color: islandWin.currentTab === 2 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -4359,7 +4885,7 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                                 Text {
-                                    text: "Clips"
+                                    text: root.t("tab_clips", "Clips")
                                     color: islandWin.currentTab === 3 ? root.colBg : root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -4417,7 +4943,7 @@ ShellRoot {
                                     Layout.fillWidth: true
                                     spacing: 2
                                     Text {
-                                        text: root.activePlayerTitle || "Nothing Playing"
+                                        text: root.activePlayerTitle || root.t("mod_media_nothing", "Nothing Playing")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 12
@@ -4507,7 +5033,7 @@ ShellRoot {
                                                 Layout.fillWidth: true
                                                 spacing: 1
                                                 Text {
-                                                    text: "Wi-Fi"
+                                                    text: root.t("mod_wifi", "Wi-Fi")
                                                     color: root.wifiEnabled ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 11
@@ -4516,7 +5042,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: root.wifiEnabled ? (root.wifiSsid || "Connected") : "Disabled"
+                                                    text: root.wifiEnabled ? (root.wifiSsid || root.t("mod_wifi_connected", "Connected")) : root.t("mod_wifi_disabled", "Disabled")
                                                     color: root.wifiEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -4633,7 +5159,7 @@ ShellRoot {
                                                 Layout.fillWidth: true
                                                 spacing: 1
                                                 Text {
-                                                    text: "Bluetooth"
+                                                    text: root.t("mod_bt", "Bluetooth")
                                                     color: root.btEnabled ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 11
@@ -4642,7 +5168,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: root.pairRequest.active ? "Pairing request pending" : (root.btEnabled ? (root.btDevices.filter(d => d.connected).length > 0 ? root.btDevices.filter(d => d.connected)[0].name : "Enabled") : "Disabled")
+                                                    text: root.pairRequest.active ? root.t("mod_bt_pairing", "Pairing request pending") : (root.btEnabled ? (root.btDevices.filter(d => d.connected).length > 0 ? root.btDevices.filter(d => d.connected)[0].name : root.t("mod_bt_enabled", "Enabled")) : root.t("mod_bt_disabled", "Disabled"))
                                                     color: root.btEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -4759,7 +5285,7 @@ ShellRoot {
                                                 Layout.fillWidth: true
                                                 spacing: 1
                                                 Text {
-                                                    text: "Audio Output"
+                                                    text: root.t("mod_audio", "Audio Output")
                                                     color: root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 11
@@ -4768,7 +5294,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: root.isMuted ? "Muted" : root.activeSinkName
+                                                    text: root.isMuted ? root.t("mod_audio_muted", "Muted") : root.activeSinkName
                                                     color: root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -4859,7 +5385,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Rust-Dock"
+                                            text: root.t("mod_dock", "Rust-Dock")
                                             color: root.dockEnabled ? root.colBg : root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -4868,7 +5394,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.dockEnabled ? "Enabled · click to hide" : "Disabled · click to show"
+                                            text: root.dockEnabled ? root.t("mod_dock_enabled", "Enabled · click to hide") : root.t("mod_dock_disabled", "Disabled · click to show")
                                             color: root.dockEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -4923,7 +5449,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Notifications"
+                                            text: root.t("mod_notif", "Notifications")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -4932,7 +5458,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.notifUnread > 0 ? (root.notifUnread > 9 ? "9+ unread" : root.notifUnread + " unread") : "No unread"
+                                            text: root.notifUnread > 0 ? (root.notifUnread > 9 ? "9+ " + root.t("mod_notif_unread", "unread") : root.notifUnread + " " + root.t("mod_notif_unread", "unread")) : root.t("mod_notif_none", "No unread")
                                             color: root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -4989,7 +5515,7 @@ ShellRoot {
                                                 Layout.fillWidth: true
                                                 spacing: 1
                                                 Text {
-                                                    text: "Night Light"
+                                                    text: root.t("mod_nl", "Night Light")
                                                     color: root.nightLightEnabled ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 11
@@ -4998,7 +5524,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: root.nightLightEnabled ? (root.nightLightTemperature + "K · " + root.nightLightGamma + "%") : (root.nightLightTemperature + "K · Inactive")
+                                                    text: root.nightLightEnabled ? (root.nightLightTemperature + "K · " + root.nightLightGamma + "%") : (root.nightLightTemperature + "K · " + root.t("mod_nl_inactive", "Inactive"))
                                                     color: root.nightLightEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -5086,7 +5612,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Caffeine"
+                                            text: root.t("mod_caffeine", "Caffeine")
                                             color: root.caffeineEnabled ? root.colBg : root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -5095,7 +5621,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.caffeineEnabled ? "Awake Mode" : "Normal Sleep"
+                                            text: root.caffeineEnabled ? root.t("mod_caffeine_awake", "Awake Mode") : root.t("mod_caffeine_sleep", "Normal Sleep")
                                             color: root.caffeineEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -5150,7 +5676,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Power Saver"
+                                            text: root.t("mod_powersave", "Power Saver")
                                             color: root.powerSaverEnabled ? root.colBg : root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -5159,7 +5685,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.powerSaverEnabled ? "Eco Active" : "Disabled"
+                                            text: root.powerSaverEnabled ? root.t("mod_powersave_eco", "Eco Active") : root.t("mod_powersave_disabled", "Disabled")
                                             color: root.powerSaverEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -5215,7 +5741,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Performance"
+                                            text: root.t("mod_perf", "Performance")
                                             color: root.perfMode ? root.colBg : root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -5224,7 +5750,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.perfMode ? "Max Boost" : "Balanced"
+                                            text: root.perfMode ? root.t("mod_perf_boost", "Max Boost") : root.t("mod_perf_balanced", "Balanced")
                                             color: root.perfMode ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -5280,7 +5806,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Do Not Disturb"
+                                            text: root.t("mod_dnd", "Do Not Disturb")
                                             color: root.dndEnabled ? root.colBg : root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -5289,7 +5815,7 @@ ShellRoot {
                                             Layout.fillWidth: true
                                         }
                                         Text {
-                                            text: root.dndEnabled ? "Silenced" : "Sounds On"
+                                            text: root.dndEnabled ? root.t("mod_dnd_silenced", "Silenced") : root.t("mod_dnd_sounds", "Sounds On")
                                             color: root.dndEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -5362,7 +5888,7 @@ ShellRoot {
                                     Item { Layout.fillWidth: true }
 
                                     Text {
-                                        text: "Volume"
+                                        text: root.t("mod_volume", "Volume")
                                         color: (!root.isMuted && root.volumeLevel > 0.85) ? root.colBg : root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -5452,7 +5978,7 @@ ShellRoot {
                                     Item { Layout.fillWidth: true }
 
                                     Text {
-                                        text: "Brightness"
+                                        text: root.t("mod_brightness", "Brightness")
                                         color: root.brightnessLevel > 0.85 ? root.colBg : root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -5593,7 +6119,7 @@ ShellRoot {
                                 border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08); border.width: 1
                                 RowLayout { anchors.centerIn: parent; spacing: 5
                                     Text { text: "󰈊"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Picker"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("mod_picker", "Picker"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { islandWin.expanded = false; root.runCmd("hyprpicker -a"); } }
                             }
@@ -5603,7 +6129,7 @@ ShellRoot {
                                 border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08); border.width: 1
                                 RowLayout { anchors.centerIn: parent; spacing: 5
                                     Text { text: "󰸉"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Gallery"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("mod_gallery", "Gallery"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 // El "sleep 0.6" no es cosmetico. La isla pide foco de teclado
                                 // (OnDemand) mientras esta expandida, y si rofi se abre en ese
@@ -5619,7 +6145,7 @@ ShellRoot {
                                 border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08); border.width: 1
                                 RowLayout { anchors.centerIn: parent; spacing: 5
                                     Text { text: "󰑐"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Random"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("mod_random", "Random"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 // Este boton pone "Random" y un icono de barajado, pero llamaba a
                                 // wallpaper-changer-with-waybar-sync, que abre un selector para elegir
@@ -5644,7 +6170,7 @@ ShellRoot {
                                         font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13
                                     }
                                     Text {
-                                        text: root.recState.recording ? root.recState.elapsed_str : "Record"
+                                        text: root.recState.recording ? root.recState.elapsed_str : root.t("mod_record", "Record")
                                         color: root.recState.recording ? "#EF5350" : root.colFg
                                         font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold
                                     }
@@ -5674,7 +6200,7 @@ ShellRoot {
                                 border.color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08); border.width: 1
                                 RowLayout { anchors.centerIn: parent; spacing: 5
                                     Text { text: "󰈮"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Tasks"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("mod_tasks", "Tasks"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { islandWin.expanded = false; root.runCmd("kitty -e htop"); } }
                             }
@@ -5711,7 +6237,7 @@ ShellRoot {
                                         font.pixelSize: 14
                                     }
                                     Text {
-                                        text: "Back"
+                                        text: root.t("wifi_back", "Back")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -5727,7 +6253,7 @@ ShellRoot {
                             }
 
                             Text {
-                                text: "Available Wi-Fi Networks"
+                                text: root.t("wifi_title", "Available Wi-Fi Networks")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -5774,7 +6300,7 @@ ShellRoot {
                                         font.weight: Font.Bold
                                     }
                                     Text {
-                                        text: root.wifiEnabled ? (root.wifiSsid !== "Disabled" && root.wifiSsid !== "Disconnected" ? ("Connected to: " + root.wifiSsid) : "Enabled") : "Disabled"
+                                        text: root.wifiEnabled ? (root.wifiSsid !== "Disabled" && root.wifiSsid !== "Disconnected" ? (root.t("wifi_connected", "Connected to:") + " " + root.wifiSsid) : root.t("mod_wifi_enabled", "Enabled")) : root.t("mod_wifi_disabled", "Disabled")
                                         color: root.colMuted
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 10
@@ -5939,7 +6465,7 @@ ShellRoot {
                                         color: root.colSurface
                                         Text {
                                             anchors.centerIn: parent
-                                            text: islandWin.wifiPasswordVisible ? "Hide" : "Show"
+                                            text: islandWin.wifiPasswordVisible ? root.t("wifi_hide", "Hide") : root.t("wifi_show", "Show")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 8
@@ -5958,7 +6484,7 @@ ShellRoot {
                                         opacity: islandWin.wifiConnectState === "connecting" ? 0.65 : 1
                                         Text {
                                             anchors.centerIn: parent
-                                            text: islandWin.wifiConnectState === "connecting" ? "Connecting" :
+                                            text: islandWin.wifiConnectState === "connecting" ? root.t("wifi_connecting", "Connecting") :
                                                   islandWin.wifiConnectState === "connected" ? "Connected" :
                                                   islandWin.wifiConnectState === "error" ? "Retry" : "Connect"
                                             color: root.colBg
@@ -6070,7 +6596,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: (modelData.saved ? "Saved  •  " : "") + modelData.signal + "%  •  " + modelData.security
+                                                    text: (modelData.saved ? (root.t("wifi_saved", "Saved") + "  •  ") : "") + modelData.signal + "%  •  " + modelData.security
                                                     color: root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -6084,7 +6610,7 @@ ShellRoot {
                                                 color: modelData.connected ? Qt.rgba(255, 85, 85, 0.2) : root.colAccent
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: modelData.connected ? "Disconnect" : "Connect"
+                                                    text: modelData.connected ? root.t("wifi_disconnect", "Disconnect") : root.t("wifi_connect", "Connect")
                                                     color: modelData.connected ? "#ff5555" : root.colBg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -6125,7 +6651,7 @@ ShellRoot {
 
                                 Text {
                                     visible: root.wifiList.length === 0
-                                    text: root.wifiScanning ? "Scanning nearby Wi-Fi networks..." : "No Wi-Fi networks found. Click Scan."
+                                    text: root.wifiScanning ? root.t("wifi_scanning", "Scanning nearby Wi-Fi networks...") : root.t("wifi_none", "No Wi-Fi networks found. Click Scan.")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -6165,7 +6691,7 @@ ShellRoot {
                                         font.pixelSize: 14
                                     }
                                     Text {
-                                        text: "Back"
+                                        text: root.t("bt_back", "Back")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -6181,7 +6707,7 @@ ShellRoot {
                             }
 
                             Text {
-                                text: "Bluetooth Devices"
+                                text: root.t("bt_title", "Bluetooth Devices")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -6227,7 +6753,7 @@ ShellRoot {
                                         font.weight: Font.Bold
                                     }
                                     Text {
-                                        text: !root.btEnabled ? "Disabled" : (root.btScanning ? "Scanning nearby..." : (root.namedBtDevices.length > 0 ? root.namedBtDevices.length + " devices available" : "Ready to pair"))
+                                        text: !root.btEnabled ? root.t("mod_bt_disabled", "Disabled") : (root.btScanning ? root.t("bt_scanning_short", "Scanning nearby...") : (root.namedBtDevices.length > 0 ? (root.namedBtDevices.length + " " + root.t("bt_devices_avail", "devices available")) : root.t("bt_ready", "Ready to pair")))
                                         color: root.colMuted
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 10
@@ -6344,7 +6870,7 @@ ShellRoot {
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "Bluetooth is Disabled"
+                                text: root.t("bt_disabled_title", "Bluetooth is Disabled")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -6352,7 +6878,7 @@ ShellRoot {
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "Turn on Bluetooth to discover and connect nearby devices"
+                                text: root.t("bt_disabled_desc", "Turn on Bluetooth to discover and connect nearby devices")
                                 color: root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 10
@@ -6364,7 +6890,7 @@ ShellRoot {
                                 color: root.colAccent
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Turn On Bluetooth"
+                                    text: root.t("bt_turn_on", "Turn On Bluetooth")
                                     color: root.colBg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -6415,7 +6941,7 @@ ShellRoot {
                                             font.pixelSize: 11
                                         }
                                         Text {
-                                            text: "Scanning nearby Bluetooth devices..."
+                                            text: root.t("bt_scanning", "Scanning nearby Bluetooth devices...")
                                             color: root.colAccent
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10
@@ -6427,7 +6953,7 @@ ShellRoot {
                                 // Empty state when no named devices
                                 Text {
                                     visible: root.namedBtDevices.length === 0 && !root.btScanning
-                                    text: "No paired or named devices found. Click Scan above."
+                                    text: root.t("bt_none_found", "No paired or named devices found. Click Scan above.")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -6482,7 +7008,7 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: modelData.mac + (modelData.connected ? "  •  Connected" : (modelData.paired ? "  •  Paired" : (modelData.rssi ? "  •  " + modelData.rssi + " dBm" : "  •  Available")))
+                                                    text: modelData.mac + (modelData.connected ? ("  •  " + root.t("bt_connected", "Connected")) : (modelData.paired ? ("  •  " + root.t("bt_paired", "Paired")) : (modelData.rssi ? "  •  " + modelData.rssi + " dBm" : ("  •  " + root.t("bt_available", "Available")))))
                                                     color: modelData.connected ? root.colAccent : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -6497,7 +7023,7 @@ ShellRoot {
                                                 color: modelData.connected ? Qt.rgba(255, 85, 85, 0.2) : root.colAccent
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: modelData.connected ? "Disconnect" : (modelData.paired ? "Connect" : "Pair & Link")
+                                                    text: modelData.connected ? root.t("bt_disconnect", "Disconnect") : (modelData.paired ? root.t("bt_connect", "Connect") : root.t("bt_pair", "Pair & Link"))
                                                     color: modelData.connected ? "#ff5555" : root.colBg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -6562,7 +7088,7 @@ ShellRoot {
                                             font.pixelSize: 12
                                         }
                                         Text {
-                                            text: (root.showUnnamedBtDevices ? "Hide " : "Show ") + root.unnamedBtDevices.length + " unnamed devices (beacons)"
+                                            text: (root.showUnnamedBtDevices ? root.t("bt_hide_unnamed", "Hide") : root.t("bt_show_unnamed", "Show")) + " " + root.unnamedBtDevices.length + " " + root.t("bt_unnamed_desc", "unnamed devices (beacons)")
                                             color: root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10
@@ -6603,7 +7129,7 @@ ShellRoot {
                                                 spacing: 0
                                                 Layout.fillWidth: true
                                                 Text {
-                                                    text: "Unnamed Device"
+                                                    text: root.t("bt_unnamed_device", "Unnamed Device")
                                                     color: root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -6624,7 +7150,7 @@ ShellRoot {
                                                 color: Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.1)
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: "Pair"
+                                                    text: root.t("bt_pair", "Pair")
                                                     color: root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -6675,7 +7201,7 @@ ShellRoot {
                                         font.pixelSize: 14
                                     }
                                     Text {
-                                        text: "Back"
+                                        text: root.t("audio_back", "Back")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -6691,7 +7217,7 @@ ShellRoot {
                             }
 
                             Text {
-                                text: "Audio Output Devices"
+                                text: root.t("audio_title", "Audio Output Devices")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -6809,7 +7335,7 @@ ShellRoot {
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: modelData.active ? "󰄬 Active" : "Select"
+                                                    text: modelData.active ? ("󰄬 " + root.t("audio_sink_active", "Active")) : root.t("audio_select", "Select")
                                                     color: modelData.active ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -6835,7 +7361,7 @@ ShellRoot {
 
                                 Text {
                                     visible: root.audioSinks.length === 0
-                                    text: "No audio output devices detected."
+                                    text: root.t("audio_none", "No audio output devices detected.")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -6848,7 +7374,7 @@ ShellRoot {
                                     Layout.fillWidth: true
                                     Layout.topMargin: 10
                                     Text {
-                                        text: "Application Volume Mixer"
+                                        text: root.t("audio_mixer", "Application Volume Mixer")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 12
@@ -6856,7 +7382,7 @@ ShellRoot {
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: root.audioApps.length + " active app(s)"
+                                        text: root.audioApps.length + " " + root.t("audio_active_apps", "active app(s)")
                                         color: root.colMuted
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 9
@@ -6900,7 +7426,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    text: (modelData.muted ? "Muted" : (modelData.volume + "%"))
+                                                    text: (modelData.muted ? root.t("mod_audio_muted", "Muted") : (modelData.volume + "%"))
                                                     color: modelData.muted ? "#EF5350" : root.colAccent
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -6966,7 +7492,7 @@ ShellRoot {
 
                                 Text {
                                     visible: root.audioApps.length === 0
-                                    text: "No active application audio streams."
+                                    text: root.t("audio_no_apps", "No active application audio streams.")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 10
@@ -6987,7 +7513,7 @@ ShellRoot {
 
                         // Subtitle
                         Text {
-                            text: "Real-time Hyprland Compositor Settings"
+                            text: root.t("hypr_title", "Real-time Hyprland Compositor Settings")
 
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
@@ -7018,8 +7544,8 @@ ShellRoot {
                                     Text { text: "󰑮"; color: root.hyprAnim ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 20 }
                                     ColumnLayout {
                                         spacing: 1
-                                        Text { text: "Animations"; color: root.hyprAnim ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                                        Text { text: root.hyprAnim ? "Enabled" : "Disabled"; color: root.hyprAnim ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("hypr_animations", "Animations"); color: root.hyprAnim ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                        Text { text: root.hyprAnim ? root.t("hypr_enabled", "Enabled") : root.t("hypr_disabled", "Disabled"); color: root.hyprAnim ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     }
                                 }
                                 MouseArea {
@@ -7047,8 +7573,8 @@ ShellRoot {
                                     Text { text: "󰂵"; color: root.hyprBlur ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 20 }
                                     ColumnLayout {
                                         spacing: 1
-                                        Text { text: "Blur Effect"; color: root.hyprBlur ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                                        Text { text: root.hyprBlur ? "Enabled" : "Disabled"; color: root.hyprBlur ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("hypr_blur", "Blur Effect"); color: root.hyprBlur ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                        Text { text: root.hyprBlur ? root.t("hypr_enabled", "Enabled") : root.t("hypr_disabled", "Disabled"); color: root.hyprBlur ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     }
                                 }
                                 MouseArea {
@@ -7076,8 +7602,8 @@ ShellRoot {
                                     Text { text: "󰞏"; color: root.hyprShadow ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 20 }
                                     ColumnLayout {
                                         spacing: 1
-                                        Text { text: "Shadows"; color: root.hyprShadow ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                                        Text { text: root.hyprShadow ? "Enabled" : "Disabled"; color: root.hyprShadow ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("hypr_shadows", "Shadows"); color: root.hyprShadow ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                        Text { text: root.hyprShadow ? root.t("hypr_enabled", "Enabled") : root.t("hypr_disabled", "Disabled"); color: root.hyprShadow ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     }
                                 }
                                 MouseArea {
@@ -7105,8 +7631,8 @@ ShellRoot {
                                     Text { text: "󰓅"; color: root.perfMode ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 20 }
                                     ColumnLayout {
                                         spacing: 1
-                                        Text { text: "Performance"; color: root.perfMode ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                                        Text { text: root.perfMode ? "Max Performance" : "Balanced"; color: root.perfMode ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("hypr_perf", "Performance"); color: root.perfMode ? root.colBg : root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                        Text { text: root.perfMode ? root.t("hypr_max_perf", "Max Performance") : root.t("hypr_balanced", "Balanced"); color: root.perfMode ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     }
                                 }
                                 MouseArea {
@@ -7144,22 +7670,22 @@ ShellRoot {
                             spacing: 1
                             Layout.fillWidth: true
                             Text {
-                                text: (root.batt?.count ?? 0) > 0 ? "Batteries" : "Power Source"
+                                text: (root.batt?.count ?? 0) > 0 ? root.t("hypr_batteries", "Batteries") : root.t("hypr_power_source", "Power Source")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 12
                                 font.weight: Font.Bold
                             }
                             Text {
-                            text: (root.batt?.count ?? 0) > 1
-                            ? (root.batt.count) + " devices · " + (root.batt.total_pct ?? 0) + "% average · "
-                              + ((root.batt?.total_cycles ?? 0) + " cycles")
-                            : ((root.batt?.count ?? 0) === 1
-                               ? ((root.batt?.total_pct ?? 0) + "% · " + ((root.batt?.ac?.online) ? "Charging" : "On battery")
-                                 + " · " + ((root.batt?.total_cycles ?? 0) + " cycles"))
-                               : ((root.batt?.ac?.online ?? true) ? "AC Mains Connected · Direct Power" : "Direct Power Active"))
-                            color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
-                            elide: Text.ElideRight; Layout.fillWidth: true
+                                text: (root.batt?.count ?? 0) > 1
+                                    ? (root.batt.count) + " " + root.t("bat_devices", "devices") + " · " + (root.batt.total_pct ?? 0) + "% · "
+                                      + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles"))
+                                    : ((root.batt?.count ?? 0) === 1
+                                        ? ((root.batt?.total_pct ?? 0) + "% · " + ((root.batt?.ac?.online) ? root.t("bat_charging", "Charging") : root.t("bat_on_battery", "On battery"))
+                                          + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles")))
+                                        : ((root.batt?.ac?.online ?? true) ? root.t("bat_ac_online", "AC Mains Online") : root.t("bat_ac_active", "Direct Power Supply Active")))
+                                color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
+                                elide: Text.ElideRight; Layout.fillWidth: true
                             }
                             }
 
@@ -7225,7 +7751,7 @@ ShellRoot {
                                         Layout.fillWidth: true
                                         spacing: 1
                                         Text {
-                                            text: "Graphics Profile"
+                                            text: root.t("hypr_gpu_profile", "Graphics Profile")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 12
@@ -7288,7 +7814,7 @@ ShellRoot {
                                                     font.pixelSize: 11
                                                 }
                                                 Text {
-                                                    text: "Integrated"
+                                                    text: root.t("hypr_gpu_integrated", "Integrated")
                                                     color: root.gpuData.current_mode === "integrated" ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -7297,7 +7823,7 @@ ShellRoot {
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
-                                                text: "iGPU Only"
+                                                text: root.t("hypr_gpu_igpu_only", "iGPU Only")
                                                 color: root.gpuData.current_mode === "integrated" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 8
@@ -7334,7 +7860,7 @@ ShellRoot {
                                                     font.pixelSize: 10
                                                 }
                                                 Text {
-                                                    text: "Hybrid"
+                                                    text: root.t("hypr_gpu_hybrid", "Hybrid")
                                                     color: root.gpuData.current_mode === "hybrid" ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -7343,7 +7869,7 @@ ShellRoot {
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
-                                                text: "PRIME Auto"
+                                                text: root.t("hypr_gpu_prime_auto", "PRIME Auto")
                                                 color: root.gpuData.current_mode === "hybrid" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 8
@@ -7381,7 +7907,7 @@ ShellRoot {
                                                     font.pixelSize: 11
                                                 }
                                                 Text {
-                                                    text: "Dedicated"
+                                                    text: root.t("hypr_gpu_dedicated", "Dedicated")
                                                     color: root.gpuData.current_mode === "dedicated" ? root.colBg : root.colFg
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 10
@@ -7390,7 +7916,7 @@ ShellRoot {
                                             }
                                             Text {
                                                 Layout.alignment: Qt.AlignHCenter
-                                                text: "dGPU Only"
+                                                text: root.t("hypr_gpu_dgpu_only", "dGPU Only")
                                                 color: root.gpuData.current_mode === "dedicated" ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 8
@@ -7454,7 +7980,7 @@ ShellRoot {
                                     spacing: 10
 
                                     Text {
-                                        text: "Rounding:"
+                                        text: root.t("hypr_rounding", "Rounding:")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -7500,7 +8026,7 @@ ShellRoot {
                                     spacing: 10
 
                                     Text {
-                                        text: "Gaps:"
+                                        text: root.t("hypr_gaps", "Gaps:")
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -7575,21 +8101,25 @@ ShellRoot {
                                     Layout.fillWidth: true
                                     spacing: 2
                                     RowLayout {
+                                        Layout.fillWidth: true
                                         spacing: 6
                                         Text {
-                                            text: "System Update (OTA)"
+                                            text: root.t("ota_title", "System Update (OTA)")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 12
                                             font.weight: Font.Bold
                                         }
+                                        Item { Layout.fillWidth: true }
                                         Rectangle {
                                             visible: root.otaData.has_updates
-                                            width: 82; height: 18; radius: 9
+                                            implicitWidth: otaPillText.implicitWidth + 14
+                                            height: 18; radius: 9
                                             color: root.colAccent
                                             Text {
+                                                id: otaPillText
                                                 anchors.centerIn: parent
-                                                text: "New Update"
+                                                text: root.t("ota_new", "New Update")
                                                 color: root.colBg
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 9
@@ -7639,7 +8169,7 @@ ShellRoot {
                                 Layout.fillWidth: true; height: 36; radius: 10; color: root.colSurface
                                 RowLayout { anchors.centerIn: parent; spacing: 6
                                     Text { text: "󰕰"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Split Layout"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("hypr_split", "Split Layout"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.runCmd("$HOME/.local/bin/notch-hypr-helper toggle-split") }
                             }
@@ -7648,7 +8178,7 @@ ShellRoot {
                                 Layout.fillWidth: true; height: 36; radius: 10; color: root.colSurface
                                 RowLayout { anchors.centerIn: parent; spacing: 6
                                     Text { text: "󰑐"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: "Reload"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { text: root.t("hypr_reload", "Reload"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { root.runCmd("$HOME/.local/bin/notch-hypr-helper reload"); hyprRefreshTimer.restart(); } }
                             }
@@ -7681,7 +8211,7 @@ ShellRoot {
                                 color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
                             }
                             Text {
-                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? "Charging" : "On battery") : ((root.batt?.ac?.online ?? true) ? "AC Mains Online" : "External Power")
+                                text: (root.batt?.count ?? 0) > 0 ? ((root.batt?.ac?.online) ? root.t("bat_charging", "Charging") : root.t("bat_on_battery", "On battery")) : ((root.batt?.ac?.online ?? true) ? root.t("bat_ac_online", "AC Mains Online") : root.t("bat_external_power", "External Power"))
                                 color: (root.batt?.ac?.online ?? true) ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9
                             }
@@ -7705,7 +8235,7 @@ ShellRoot {
                                 RowLayout {
                                     spacing: 8
                                     Text { text: "󰚥"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 18 }
-                                    Text { text: "Direct Power Supply Active"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                    Text { text: root.t("bat_ac_active", "Direct Power Supply Active"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
                                 }
                                 Text {
                                     text: (root.batt?.ac?.online ?? true)
@@ -7819,13 +8349,13 @@ ShellRoot {
                         Row {
                         spacing: 3
                         visible: (modelData.power_w !== null && modelData.power_w !== undefined)
-                        Text { text: "Power"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_power", "Power"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text { text: (modelData.power_w ?? 0) + " W"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         }
                         Row {
                         spacing: 3
                         visible: (modelData.voltage !== null && modelData.voltage !== undefined)
-                        Text { text: "Volt"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_volt", "Volt"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text {
                             // Sin toFixed sale "17.580000000000002 V": con una sola
                             // bateria el voltaje ya viene redondeado de sysfs y no se
@@ -7837,25 +8367,25 @@ ShellRoot {
                         Row {
                         spacing: 3
                         visible: (modelData.health !== null && modelData.health !== undefined)
-                        Text { text: "Health"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_health", "Health"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text { text: (modelData.health ?? 0) + "%"; color: (modelData.health ?? 100) >= 90 ? root.colFg : "#e0a75c"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         }
                         Row {
                         spacing: 3
                         visible: (modelData.energy_full !== null && modelData.energy_full !== undefined)
-                        Text { text: "Full"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_full", "Full"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text { text: (modelData.energy_full ?? 0) + " Wh"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         }
                         Row {
                         spacing: 3
                         visible: (modelData.cycles !== null && modelData.cycles !== undefined)
-                        Text { text: "Cycles"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_cycles", "Cycles"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text { text: "" + (modelData.cycles ?? 0); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         }
                         Row {
                         spacing: 3
                         visible: (modelData.threshold !== null && modelData.threshold !== undefined)
-                        Text { text: "Limit"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                        Text { text: root.t("bat_limit", "Limit"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         Text { text: (battCardDel.umbral) + "%"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                         }
                         }
@@ -7933,7 +8463,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 spacing: 6
                                 Text { text: "󰁍"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
-                                Text { text: "Back"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                Text { text: root.t("notif_back", "Back"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                             }
 
                             MouseArea {
@@ -7955,7 +8485,7 @@ ShellRoot {
                             Layout.fillWidth: true
                             spacing: 10
                             Text {
-                                text: "Notifications"
+                                text: root.t("notif_title", "Notifications")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -7986,7 +8516,7 @@ ShellRoot {
                                 border.width: 1
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Clear all"
+                                    text: root.t("notif_clear", "Clear all")
                                     color: root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -8080,7 +8610,7 @@ ShellRoot {
                                             }
 
                                             Text {
-                                                text: "Tap to open app"
+                                                text: root.t("notif_tap_open", "Tap to open app")
                                                 color: root.colMuted
                                                 opacity: 0.6
                                                 font.family: "JetBrainsMono Nerd Font"
@@ -8120,7 +8650,7 @@ ShellRoot {
                                             font.pixelSize: 11
                                         }
                                         Text {
-                                            text: "Muted apps"
+                                            text: root.t("notif_muted_apps", "Muted apps")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10
@@ -8185,7 +8715,7 @@ ShellRoot {
                                     Text {
                                         Layout.fillWidth: true
                                         visible: root.mutedApps.length > 0
-                                        text: "Notifications from muted apps are discarded before they reach the list."
+                                        text: root.t("notif_muted_desc", "Notifications from muted apps are discarded before they reach the list.")
                                         color: root.colMuted
                                         opacity: 0.65
                                         font.family: "JetBrainsMono Nerd Font"
@@ -8198,7 +8728,7 @@ ShellRoot {
 
                                 Text {
                                     visible: root.notifHistory.length === 0
-                                    text: "No notifications yet."
+                                    text: root.t("notif_empty", "No notifications yet.")
                                     color: root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -8223,7 +8753,7 @@ ShellRoot {
                             Layout.fillWidth: true
                             spacing: 10
                             Text {
-                                text: "Clipboard"
+                                text: root.t("clip_title", "Clipboard")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -8253,7 +8783,7 @@ ShellRoot {
                                 border.width: 1
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Clear all"
+                                    text: root.t("clip_clear", "Clear all")
                                     color: root.colFg
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
@@ -8373,7 +8903,7 @@ Flickable {
 
                         Text {
                             visible: root.clipList.length === 0
-                            text: "Empty: copy something first"
+                            text: root.t("clip_empty", "Empty: copy something first")
                             color: root.colMuted
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 10
@@ -8404,7 +8934,7 @@ Flickable {
                             spacing: 10
 
                             Text {
-                                text: "󰍹 Workspaces Overview"
+                                text: "󰍹 " + root.t("ws_overview", "Workspaces Overview")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -8421,7 +8951,7 @@ Flickable {
                                 Text {
                                     id: wsActivePillText
                                     anchors.centerIn: parent
-                                    text: "Space " + (root.workspacesData?.active_id || 1) + " Active"
+                                    text: root.t("ws_space", "Space") + " " + (root.workspacesData?.active_id || 1) + " " + root.t("ws_active", "Active")
                                     color: root.colAccent
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 10
@@ -8451,7 +8981,7 @@ Flickable {
                                         font.weight: Font.Bold
                                     }
                                     Text {
-                                        text: "Add Space"
+                                        text: root.t("ws_add", "Add Space")
                                         color: root.colBg
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 11
@@ -8559,7 +9089,7 @@ Flickable {
                                                     Text {
                                                         id: spaceBadgeText
                                                         anchors.centerIn: parent
-                                                        text: "Space " + model.id
+                                                        text: root.t("ws_space", "Space") + " " + model.id
                                                         color: model.is_active ? root.colBg : root.colFg
                                                         font.family: "JetBrainsMono Nerd Font"
                                                         font.pixelSize: 10
@@ -8631,7 +9161,7 @@ Flickable {
                                                             Layout.alignment: Qt.AlignHCenter
                                                         }
                                                         Text {
-                                                            text: model.windows_count > 0 ? "Space " + model.id : "Empty Space"
+                                                            text: model.windows_count > 0 ? (root.t("ws_space", "Space") + " " + model.id) : root.t("ws_empty", "Empty Space")
                                                             color: root.colFg
                                                             font.family: "JetBrainsMono Nerd Font"
                                                             font.pixelSize: 10
@@ -8790,7 +9320,7 @@ Flickable {
                                         }
 
                                         Text {
-                                            text: "Add Space"
+                                            text: root.t("ws_add", "Add Space")
                                             color: root.colFg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 11
@@ -8799,7 +9329,7 @@ Flickable {
                                         }
 
                                         Text {
-                                            text: "Space " + (root.workspacesData?.next_id || "+")
+                                            text: root.t("ws_space", "Space") + " " + (root.workspacesData?.next_id || "+")
                                             color: root.colMuted
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -8828,7 +9358,7 @@ Flickable {
                             Layout.topMargin: 2
 
                             Text {
-                                text: "󰌌 Super + Tab toggles Overview • Click card to switch • 󰅖 removes space"
+                                text: "󰌌 " + root.t("ws_footer", "Super + Tab toggles Overview • Click card to switch • 󰅖 removes space")
                                 color: root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 10
@@ -8853,12 +9383,12 @@ Flickable {
                                 RowLayout {
                                     anchors.centerIn: parent; spacing: 6
                                     Text { text: "󰁍"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
-                                    Text { text: "Back"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("nl_back", "Back"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: islandWin.controlSubView = 0 }
                             }
                             Text {
-                                text: "Night Light"
+                                text: root.t("nl_title", "Night Light")
                                 color: root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13
@@ -8892,8 +9422,8 @@ Flickable {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 2
-                                    Text { text: root.nightLightEnabled ? "Enabled" : "Disabled"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                                    Text { text: root.nightLightEnabled ? "Blue-light filter is active" : "Blue-light filter is off"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                    Text { text: root.nightLightEnabled ? root.t("nl_enabled", "Enabled") : root.t("nl_disabled", "Disabled"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                                    Text { text: root.nightLightEnabled ? root.t("nl_active_desc", "Blue-light filter is active") : root.t("nl_off_desc", "Blue-light filter is off"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                 }
                                 Item { Layout.fillWidth: true }
                                 Rectangle {
@@ -8923,7 +9453,7 @@ Flickable {
                                 anchors.fill: parent; anchors.margins: 12; spacing: 7
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "Color temperature"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("nl_temp", "Color temperature"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                     Item { Layout.fillWidth: true }
                                     Text { text: root.nightLightTemperature + " K"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
@@ -8954,10 +9484,10 @@ Flickable {
                                     Layout.fillWidth: true; spacing: 6
                                     Repeater {
                                         model: [
-                                            { label: "Candle", value: 2200 },
-                                            { label: "Warm", value: 3000 },
-                                            { label: "Balanced", value: 4500 },
-                                            { label: "Daylight", value: 6000 }
+                                            { label: root.t("nl_candle", "Candle"), value: 2200 },
+                                            { label: root.t("nl_warm", "Warm"), value: 3000 },
+                                            { label: root.t("nl_balanced", "Balanced"), value: 4500 },
+                                            { label: root.t("nl_daylight", "Daylight"), value: 6000 }
                                         ]
                                         delegate: Rectangle {
                                             required property var modelData
@@ -8974,7 +9504,7 @@ Flickable {
                                         }
                                     }
                                 }
-                                Text { text: "Lower values are warmer; higher values look more neutral."; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8 }
+                                Text { text: root.t("nl_temp_desc", "Lower values are warmer; higher values look more neutral."); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8 }
                             }
                         }
 
@@ -8988,7 +9518,7 @@ Flickable {
                                 anchors.fill: parent; anchors.margins: 12; spacing: 6
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "Display gamma"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("nl_gamma", "Display gamma"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                     Item { Layout.fillWidth: true }
                                     Text { text: root.nightLightGamma + "%"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
@@ -9015,7 +9545,7 @@ Flickable {
                                         color: root.colAccent; border.color: root.colFg; border.width: 1
                                     }
                                 }
-                                Text { text: "Lower gamma dims the image; 100% is normal brightness."; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8 }
+                                Text { text: root.t("nl_gamma_desc", "Lower gamma dims the image; 100% is normal brightness."); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 8 }
                             }
                         }
 
@@ -9032,14 +9562,14 @@ Flickable {
                                 spacing: 7
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "Automatic schedule"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("nl_schedule", "Automatic schedule"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                     Item { Layout.fillWidth: true }
-                                    Text { text: root.nightLightScheduleEnabled ? "Enabled" : "Optional · Off"; color: root.nightLightScheduleEnabled ? root.colAccent : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                    Text { text: root.nightLightScheduleEnabled ? root.t("nl_enabled", "Enabled") : root.t("nl_optional_off", "Optional · Off"); color: root.nightLightScheduleEnabled ? root.colAccent : root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
                                 }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
-                                    Text { text: "Start"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                    Text { text: root.t("nl_start", "Start"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     TextField {
                                         id: nightScheduleStartInput
                                         Layout.fillWidth: true
@@ -9055,7 +9585,7 @@ Flickable {
                                         onTextEdited: islandWin.nightScheduleStartText = text
                                         background: Rectangle { radius: 8; color: root.colBg; border.color: root.colBorder; border.width: 1 }
                                     }
-                                    Text { text: "End"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                    Text { text: root.t("nl_end", "End"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                     TextField {
                                         id: nightScheduleEndInput
                                         Layout.fillWidth: true
@@ -9074,7 +9604,7 @@ Flickable {
                                 }
                                 Text {
                                     Layout.fillWidth: true
-                                    text: islandWin.nightScheduleValidation || "Off by default. Set both times (24-hour HH:MM) to enable."
+                                    text: islandWin.nightScheduleValidation || root.t("nl_schedule_hint", "Off by default. Set both times (24-hour HH:MM) to enable.")
                                     color: islandWin.nightScheduleValidation ? root.colAccent : root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 8
@@ -9089,7 +9619,7 @@ Flickable {
                                         color: root.colAccent
                                         Text {
                                             anchors.centerIn: parent
-                                            text: root.nightLightScheduleEnabled ? "Update schedule" : "Enable schedule"
+                                            text: root.nightLightScheduleEnabled ? root.t("nl_schedule_update", "Update schedule") : root.t("nl_schedule_enable", "Enable schedule")
                                             color: root.colBg
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 9
@@ -9119,7 +9649,7 @@ Flickable {
                                         color: root.colBg
                                         border.color: root.colBorder; border.width: 1
                                         opacity: root.nightLightScheduleEnabled ? 1 : 0.45
-                                        Text { anchors.centerIn: parent; text: "Disable"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                        Text { anchors.centerIn: parent; text: root.t("nl_disable", "Disable"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
                                         MouseArea {
                                             anchors.fill: parent
                                             enabled: root.nightLightScheduleEnabled
@@ -9141,7 +9671,7 @@ Flickable {
                             Rectangle {
                                 Layout.fillWidth: true; height: 34; radius: 17
                                 color: root.colSurface; border.color: root.colBorder; border.width: 1
-                                Text { anchors.centerIn: parent; text: "Reset defaults · 4500 K · 100%"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                Text { anchors.centerIn: parent; text: root.t("nl_reset", "Reset defaults · 4500 K · 100%"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                                 MouseArea {
                                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                     onClicked: {
@@ -9172,7 +9702,7 @@ Flickable {
                                 RowLayout {
                                     anchors.centerIn: parent; spacing: 6
                                     Text { text: "󰁍"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
-                                    Text { text: "Back"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("pair_back", "Back"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
                                 MouseArea {
                                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -9183,7 +9713,7 @@ Flickable {
                                 }
                             }
                             Text {
-                                text: "Pairing Request"
+                                text: root.t("pair_title", "Pairing Request")
                                 color: root.colFg; font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13; font.weight: Font.Bold
                             }
@@ -9195,7 +9725,7 @@ Flickable {
                                 visible: root.pairRequest.active
                                 Text {
                                     anchors.centerIn: parent
-                                    text: root.pairRequest.state === "pending" ? "Waiting" : (root.pairRequest.state === "accepted" ? "Done" : "Closed")
+                                    text: root.pairRequest.state === "pending" ? root.t("pair_waiting", "Waiting") : (root.pairRequest.state === "accepted" ? root.t("pair_done", "Done") : root.t("pair_closed", "Closed"))
                                     color: root.pairRequest.state === "accepted" ? root.colAccent : root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 9; font.weight: Font.Bold
@@ -9253,7 +9783,7 @@ Flickable {
 
                                 Text {
                                     Layout.fillWidth: true
-                                    text: root.pairRequest.kind === "pin" ? "Enter the PIN" : (root.pairRequest.kind === "authorize" ? "Authorization" : "Confirmation code")
+                                    text: root.pairRequest.kind === "pin" ? root.t("pair_pin", "Enter the PIN") : (root.pairRequest.kind === "authorize" ? root.t("pair_auth", "Authorization") : root.t("pair_code", "Confirmation code"))
                                     color: root.colMuted; font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 9; font.weight: Font.Bold
                                 }
@@ -9328,7 +9858,7 @@ Flickable {
                                         opacity: root.pairRequest.state === "pending" ? 1 : 0.45
                                         Text {
                                             anchors.centerIn: parent
-                                            text: "Reject"
+                                            text: root.t("pair_reject", "Reject")
                                             color: root.colFg; font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10; font.weight: Font.Bold
                                         }
@@ -9346,7 +9876,7 @@ Flickable {
                                                 && (root.pairRequest.kind !== "pin" || root.pairRequest.pin.length > 0) ? 1 : 0.45
                                         Text {
                                             anchors.centerIn: parent
-                                            text: "Confirm"
+                                            text: root.t("pair_confirm", "Confirm")
                                             color: root.colBg; font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 10; font.weight: Font.Bold
                                         }
@@ -9364,7 +9894,7 @@ Flickable {
                         Text {
                             Layout.fillWidth: true
                             visible: !root.pairRequest.active
-                            text: "No pending pairing request."
+                            text: root.t("pair_none", "No pending pairing request.")
                             color: root.colMuted; font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 10
                         }
@@ -9389,7 +9919,7 @@ Flickable {
                                 RowLayout {
                                     anchors.centerIn: parent; spacing: 6
                                     Text { text: "󰁍"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
-                                    Text { text: "Back"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("ota_back", "Back"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
 
                                 MouseArea {
@@ -9399,7 +9929,7 @@ Flickable {
                             }
 
                             Text {
-                                text: "System Update"
+                                text: root.t("ota_title", "System Update")
                                 color: root.colFg; font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 13; font.weight: Font.Bold
                             }
@@ -9491,14 +10021,14 @@ Flickable {
 
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: root.otaData.has_updates ? "System Update Available" : "System is Up to Date"
+                                    text: root.otaData.has_updates ? root.t("ota_available", "System Update Available") : root.t("ota_uptodate", "System is Up to Date")
                                     color: root.colFg; font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13; font.weight: Font.Bold
                                 }
 
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: root.otaData.has_updates ? root.otaData.status_text : ("Rhythm Hyprland " + (root.otaData.current_version || "v1.0.0") + " · Last checked: " + (root.otaData.last_checked || "Recently"))
+                                    text: root.otaData.has_updates ? root.otaData.status_text : ("Rhythm Hyprland " + (root.otaData.current_version || "v1.0.0") + " · " + root.t("ota_last_checked", "Last checked:") + " " + (root.otaData.last_checked || root.t("ota_recently", "Recently")))
                                     color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10
                                 }
                             }
@@ -9513,7 +10043,7 @@ Flickable {
                                 RowLayout { anchors.fill: parent; anchors.margins: 8; spacing: 8
                                     Text { text: "󰓅"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15 }
                                     ColumnLayout { spacing: 1
-                                        Text { text: "Current Version"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("ota_current", "Current Version"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                         Text { text: (root.otaData.current_version || "v1.0.0") + " (" + (root.otaData.dotfiles_hash || "git") + ")"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
                                     }
                                 }
@@ -9524,7 +10054,7 @@ Flickable {
                                 RowLayout { anchors.fill: parent; anchors.margins: 8; spacing: 8
                                     Text { text: "󰑐"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15 }
                                     ColumnLayout { spacing: 1
-                                        Text { text: "Target Release"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("ota_target", "Target Release"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                         Text { text: (root.otaData.latest_version && root.otaData.latest_version !== root.otaData.current_version) ? (root.otaData.latest_version + " (New)") : (root.otaData.current_version + " (Latest)"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
                                     }
                                 }
@@ -9535,7 +10065,7 @@ Flickable {
                                 RowLayout { anchors.fill: parent; anchors.margins: 8; spacing: 8
                                     Text { text: "󰌽"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15 }
                                     ColumnLayout { spacing: 1
-                                        Text { text: "Linux Kernel"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: root.t("ota_kernel", "Linux Kernel"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
                                         Text { text: root.otaData.kernel || "Arch Linux"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
                                     }
                                 }
@@ -9546,8 +10076,8 @@ Flickable {
                                 RowLayout { anchors.fill: parent; anchors.margins: 8; spacing: 8
                                     Text { text: "󰘬"; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15 }
                                     ColumnLayout { spacing: 1
-                                        Text { text: "Release Channel"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
-                                        Text { text: (root.otaData.dotfiles_branch || "main") + " · " + (root.otaData.has_updates ? (root.otaData.dotfiles_behind + " behind") : "Up to date"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
+                                        Text { text: root.t("ota_channel", "Release Channel"); color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: (root.otaData.dotfiles_branch || "main") + " · " + (root.otaData.has_updates ? (root.otaData.dotfiles_behind + " " + root.t("ota_behind", "behind")) : root.t("ota_uptodate", "Up to date")); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
                                     }
                                 }
                             }
@@ -9564,7 +10094,7 @@ Flickable {
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: "Changelog & History"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: root.t("ota_changelog", "Changelog & History"); color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                     Item { Layout.fillWidth: true }
                                     Rectangle {
                                         height: 20; radius: 10
@@ -9589,7 +10119,7 @@ Flickable {
                                     Text {
                                         id: changelogDisplayText
                                         width: parent.width
-                                        text: root.otaChangelogText || "Loading changelog..."
+                                        text: root.otaChangelogText || root.t("ota_loading_changelog", "Loading changelog...")
                                         color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; wrapMode: Text.Wrap
                                     }
                                 }
@@ -9615,7 +10145,7 @@ Flickable {
                                         }
                                     }
                                     Text {
-                                        text: root.otaChecking ? "Checking..." : "Check for update"
+                                        text: root.otaChecking ? root.t("ota_checking", "Checking...") : root.t("ota_check", "Check for update")
                                         color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold
                                     }
                                 }
@@ -9639,7 +10169,7 @@ Flickable {
                                         color: root.colBg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15
                                     }
                                     Text {
-                                        text: root.otaUpdating ? "Installing..." : "Download & Install"
+                                        text: root.otaUpdating ? root.t("ota_installing", "Installing...") : root.t("ota_install", "Download & Install")
                                         color: root.colBg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold
                                     }
                                 }
