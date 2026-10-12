@@ -1211,7 +1211,7 @@ ShellRoot {
         "lang_subtitle": "AJUSTES DE TECLADO E IDIOMA",
         "lang_input_languages": "Distribuciones de teclado",
         "lang_active": "Activo",
-        "lang_add_layout": "+ Añadir distribución de teclado",
+        "lang_add_layout": "Añadir distribución de teclado",
         "lang_system_language": "Idioma del sistema",
         "lang_user_language": "Idioma de usuario actual:",
         "lang_change_display": "Cambiar mi idioma de pantalla",
@@ -1450,7 +1450,7 @@ ShellRoot {
         "lang_subtitle": "KEYBOARD AND LANGUAGE SETTINGS",
         "lang_input_languages": "Input Languages",
         "lang_active": "Active",
-        "lang_add_layout": "+ Add keyboard layout",
+        "lang_add_layout": "Add keyboard layout",
         "lang_system_language": "System Language",
         "lang_user_language": "Current User Language:",
         "lang_change_display": "Change my display language",
@@ -3571,21 +3571,36 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            id: addLayoutBtn
                             readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0))
                             Layout.fillWidth: true
-                            height: 32
-                            radius: 6
-                            color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (addLayoutHover.containsMouse ? Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.08) : "transparent")
-                            border.color: isNavFocus ? root.colAccent : "transparent"
-                            border.width: isNavFocus ? 2 : 0
+                            height: 34
+                            radius: 8
+                            color: addLayoutBtn.isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (addLayoutHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
+                            border.color: addLayoutBtn.isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                            border.width: addLayoutBtn.isNavFocus ? 2 : 1
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 12
-                                spacing: 6
+                                anchors.rightMargin: 12
+                                spacing: 8
                                 Text {
-                                    text: root.t("lang_add_layout", "+ Add keyboard layout")
-                                    color: (isNavFocus || addLayoutHover.containsMouse) ? root.colAccent : root.colMuted
+                                    text: "󰐕"
+                                    color: root.colAccent
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 13
+                                }
+                                Text {
+                                    text: root.t("lang_add_layout", "Add keyboard layout")
+                                    color: (addLayoutBtn.isNavFocus || addLayoutHover.containsMouse) ? root.colAccent : root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 11
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: "󰁔"
+                                    color: addLayoutBtn.isNavFocus ? root.colAccent : root.colMuted
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 11
                                 }
@@ -3641,13 +3656,14 @@ ShellRoot {
                     }
 
                     Rectangle {
+                        id: chgDisplayBtn
                         readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0) + 1)
                         Layout.fillWidth: true
                         height: 34
                         radius: 8
-                        color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgLangHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
-                        border.color: isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
-                        border.width: isNavFocus ? 2 : 1
+                        color: chgDisplayBtn.isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgLangHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
+                        border.color: chgDisplayBtn.isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                        border.width: chgDisplayBtn.isNavFocus ? 2 : 1
 
                         RowLayout {
                             anchors.fill: parent
@@ -3662,14 +3678,14 @@ ShellRoot {
                             }
                             Text {
                                 text: root.t("lang_change_display", "Change my display language")
-                                color: root.colFg
+                                color: (chgDisplayBtn.isNavFocus || chgLangHover.containsMouse) ? root.colAccent : root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                                 Layout.fillWidth: true
                             }
                             Text {
                                 text: "󰁔"
-                                color: isNavFocus ? root.colAccent : root.colMuted
+                                color: chgDisplayBtn.isNavFocus ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                             }
@@ -3689,13 +3705,14 @@ ShellRoot {
                     }
 
                     Rectangle {
+                        id: chgSysBtn
                         readonly property bool isNavFocus: (langInputPanel.subView === 0 && langInputPanel.navIndex === (root.langData.layouts ? root.langData.layouts.length : 0) + 2)
                         Layout.fillWidth: true
                         height: 34
                         radius: 8
-                        color: isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgSysHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
-                        border.color: isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
-                        border.width: isNavFocus ? 2 : 1
+                        color: chgSysBtn.isNavFocus ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.2) : (chgSysHover.containsMouse ? root.colSurfaceHover : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.05))
+                        border.color: chgSysBtn.isNavFocus ? root.colAccent : Qt.rgba(root.colFg.r, root.colFg.g, root.colFg.b, 0.12)
+                        border.width: chgSysBtn.isNavFocus ? 2 : 1
 
                         RowLayout {
                             anchors.fill: parent
@@ -3710,14 +3727,14 @@ ShellRoot {
                             }
                             Text {
                                 text: root.t("lang_change_system", "Change system language (localectl)")
-                                color: root.colFg
+                                color: (chgSysBtn.isNavFocus || chgSysHover.containsMouse) ? root.colAccent : root.colFg
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                                 Layout.fillWidth: true
                             }
                             Text {
                                 text: "󰁔"
-                                color: isNavFocus ? root.colAccent : root.colMuted
+                                color: chgSysBtn.isNavFocus ? root.colAccent : root.colMuted
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
                             }
