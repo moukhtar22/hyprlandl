@@ -860,7 +860,7 @@ EOF
                 nix_user_pkgs+=(
                     "brave" "vesktop" "telegram-desktop" "spotify"
                     "vscode" "neovim" "obsidian" "libreoffice" "localsend"
-                    "steam" "obs-studio" "vlc" "gimp" "fastfetch" "btop"
+                    "steam" "obs-studio" "vlc" "gimp" "fastfetch" "btop" "htop"
                 )
                 enable_steam_system=true
                 flatpaks="1"
@@ -3438,6 +3438,7 @@ step_software() {
             bc
             imagemagick
             mpv
+            htop
             btop
             fastfetch
             inotify-tools
@@ -3606,6 +3607,7 @@ step_software() {
             bc
             ImageMagick
             mpv
+            htop
             btop
             fastfetch
             inotify-tools
