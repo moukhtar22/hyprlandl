@@ -649,7 +649,7 @@ cmd_update() {
 
         # Reload desktop services
         command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1 || true
-        command -v pkill >/dev/null 2>&1 && pkill -SIGUSR2 waybar >/dev/null 2>&1 || true
+        command -v pkill >/dev/null 2>&1 && { pkill -x waybar 2>/dev/null || true; pkill -x .waybar-wrapped 2>/dev/null || true; }
 
         generate_status_json "false" >/dev/null 2>&1 || true
 
@@ -922,7 +922,8 @@ cmd_update() {
     fi
 
     if command -v pkill >/dev/null 2>&1; then
-        pkill -SIGUSR2 waybar >/dev/null 2>&1 || true
+        pkill -x waybar 2>/dev/null || true
+        pkill -x .waybar-wrapped 2>/dev/null || true
     fi
 
     # Bring the island back before anything else: it is the notification server,
@@ -1042,7 +1043,7 @@ cmd_rollback() {
         if [ -d "$src/bin" ]; then cp -rf "$src/bin"/* "$HOME/.local/bin/"; fi
 
         command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1 || true
-        command -v pkill >/dev/null 2>&1 && pkill -SIGUSR2 waybar >/dev/null 2>&1 || true
+        command -v pkill >/dev/null 2>&1 && { pkill -x waybar 2>/dev/null || true; pkill -x .waybar-wrapped 2>/dev/null || true; }
         send_notif "System Update" "Checkpoint $choice restored successfully." "normal"
         echo "Rollback completed."
     fi

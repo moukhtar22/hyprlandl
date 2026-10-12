@@ -148,7 +148,8 @@ for _proc in /proc/[0-9]*; do
         *quickshell*waybar-island*|*waybar-island*shell.qml*) kill "$_pid" 2>/dev/null || true ;;
     esac
 done
-sleep 0.2
+pkill -x waybar 2>/dev/null || true
+pkill -x .waybar-wrapped 2>/dev/null || true
 
 if ! command -v quickshell >/dev/null 2>&1; then
     echo "quickshell-island: quickshell binary not found in PATH" >&2
