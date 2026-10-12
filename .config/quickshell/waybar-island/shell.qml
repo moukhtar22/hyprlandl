@@ -6603,29 +6603,57 @@ Flickable {
 
                             Item { Layout.fillWidth: true }
 
+                            // GitHub Releases Button
                             Rectangle {
                                 width: 32; height: 32; radius: 16
-                                color: Qt.rgba(255, 255, 255, 0.08)
+                                color: ghBtnHover.containsMouse ? root.colSurfaceHover : Qt.rgba(255, 255, 255, 0.08)
+                                border.color: ghBtnHover.containsMouse ? root.colAccent : "transparent"
+                                border.width: 1
+                                Text {
+                                    anchors.centerIn: parent; text: ""
+                                    color: ghBtnHover.containsMouse ? root.colAccent : root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 15
+                                }
+                                MouseArea {
+                                    id: ghBtnHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: { islandWin.expanded = false; root.runCmd("xdg-open https://github.com/rhythmcreative/hyprland/releases") }
+                                }
+                            }
+
+                            // Check / Refresh Button
+                            Rectangle {
+                                width: 32; height: 32; radius: 16
+                                color: checkBtnHover.containsMouse ? root.colSurfaceHover : Qt.rgba(255, 255, 255, 0.08)
+                                border.color: checkBtnHover.containsMouse ? root.colAccent : "transparent"
+                                border.width: 1
                                 Text {
                                     anchors.centerIn: parent; text: "󰑐"
-                                    color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
+                                    color: checkBtnHover.containsMouse ? root.colAccent : root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
                                     RotationAnimation on rotation {
                                         running: root.otaChecking; loops: Animation.Infinite
                                         from: 0; to: 360; duration: 800
                                     }
                                 }
                                 MouseArea {
-                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    id: checkBtnHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                     onClicked: { if (!root.otaChecking) { root.otaChecking = true; otaCheckProc.running = true } }
                                 }
                             }
 
+                            // Terminal GUI Button (Terminal Console Icon)
                             Rectangle {
                                 width: 32; height: 32; radius: 16
-                                color: Qt.rgba(255, 255, 255, 0.08)
-                                Text { anchors.centerIn: parent; text: "󰓓"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
+                                color: termBtnHover.containsMouse ? root.colSurfaceHover : Qt.rgba(255, 255, 255, 0.08)
+                                border.color: termBtnHover.containsMouse ? root.colAccent : "transparent"
+                                border.width: 1
+                                Text {
+                                    anchors.centerIn: parent; text: "󰆍"
+                                    color: termBtnHover.containsMouse ? root.colAccent : root.colFg
+                                    font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14
+                                }
                                 MouseArea {
-                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    id: termBtnHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                     onClicked: { islandWin.expanded = false; root.runCmd("kitty -e system-ota gui") }
                                 }
                             }
@@ -6735,7 +6763,20 @@ Flickable {
                                     Layout.fillWidth: true
                                     Text { text: "Changelog & History"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
                                     Item { Layout.fillWidth: true }
-                                    Text { text: root.otaData.current_version || "Current"; color: root.colMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9 }
+                                    Rectangle {
+                                        height: 20; radius: 10
+                                        width: ghChipText.implicitWidth + 24
+                                        color: ghChipHover.containsMouse ? Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25) : Qt.rgba(255, 255, 255, 0.06)
+                                        RowLayout {
+                                            anchors.centerIn: parent; spacing: 4
+                                            Text { text: ""; color: root.colAccent; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 11 }
+                                            Text { id: ghChipText; text: root.otaData.current_version || "Releases"; color: root.colFg; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                        }
+                                        MouseArea {
+                                            id: ghChipHover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: { islandWin.expanded = false; root.runCmd("xdg-open https://github.com/rhythmcreative/hyprland/releases") }
+                                        }
+                                    }
                                 }
 
                                 Flickable {
