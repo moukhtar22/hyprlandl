@@ -170,9 +170,11 @@ def get_primary_keyboard():
     kbs = devs.get("keyboards", [])
     if not kbs:
         return None
-    kb = next((k for k in kbs if k.get("name") == "at-translated-set-2-keyboard"), None)
+    kb = next((k for k in kbs if k.get("main")), None)
     if not kb:
-        kb = next((k for k in kbs if k.get("main")), None)
+        kb = next((k for k in kbs if "wooting" in k.get("name", "").lower()), None)
+    if not kb:
+        kb = next((k for k in kbs if k.get("name") == "at-translated-set-2-keyboard"), None)
     if not kb:
         kb = next((k for k in kbs if k.get("layout")), kbs[0])
     return kb
@@ -287,7 +289,23 @@ def persist_hyprland_config(new_layouts_str=None, new_options_str=None):
         except Exception:
             pass
 
+def ensure_locale_generated(loc):
+    try:
+        out = subprocess.check_output(["locale", "-a"], text=True, timeout=2)
+        clean = loc.lower().replace("-", "").replace(".", "")
+        available = [l.lower().replace("-", "").replace(".", "") for l in out.splitlines()]
+        if any(clean in a or a in clean for a in available):
+            return True
+        base = loc.split(".")[0]
+        subprocess.run(["sudo", "sed", "-i", f"s/^#{base}.UTF-8 UTF-8/{base}.UTF-8 UTF-8/", "/etc/locale.gen"], timeout=3)
+        subprocess.run(["sudo", "locale-gen"], timeout=6)
+        return True
+    except Exception:
+        return False
+
 def switch_layout(target):
+    devs = get_devices()
+    kbs = devs.get("keyboards", [])
     kb = get_primary_keyboard()
     layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
     layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
@@ -303,7 +321,11 @@ def switch_layout(target):
     if target_idx < 0 or target_idx >= len(layout_codes):
         target_idx = 0
 
-    run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", str(target_idx)])
+    # Switch every detected keyboard to the target index
+    for k in kbs:
+        name = k.get("name")
+        if name:
+            run_hyprctl(["switchxkblayout", name, str(target_idx)])
     run_hyprctl(["switchxkblayout", "all", str(target_idx)])
 
     notify_quickshell()
@@ -332,6 +354,8 @@ def add_layout(code):
     print(json.dumps({"status": "added", "code": clean_code, "layouts": layout_codes}))
 
 def remove_layout(target):
+    devs = get_devices()
+    kbs = devs.get("keyboards", [])
     kb = get_primary_keyboard()
     layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
     layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
@@ -353,7 +377,11 @@ def remove_layout(target):
         new_layouts_str = ",".join(layout_codes)
         hypr_eval(f'hl.config({{ input = {{ kb_layout = "{new_layouts_str}" }} }})')
         persist_hyprland_config(new_layouts_str=new_layouts_str)
-        run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", "0"])
+        for k in kbs:
+            name = k.get("name")
+            if name:
+                run_hyprctl(["switchxkblayout", name, "0"])
+        run_hyprctl(["switchxkblayout", "all", "0"])
         notify_quickshell()
         print(json.dumps({"status": "removed", "code": target_code, "layouts": layout_codes}))
     else:
@@ -375,10 +403,32 @@ def set_user_locale(loc):
     clean_loc = loc.strip()
     if not clean_loc:
         return
+    if not clean_loc.endswith(".UTF-8") and not clean_loc.endswith(".utf8") and clean_loc != "C":
+        clean_loc = f"{clean_loc}.UTF-8"
+
+    ensure_locale_generated(clean_loc)
+
     env_dir = Path.home() / ".config/environment.d"
     env_dir.mkdir(parents=True, exist_ok=True)
     env_file = env_dir / "10-locale.conf"
     env_file.write_text(f'LANG="{clean_loc}"\nLC_MESSAGES="{clean_loc}"\n', encoding="utf-8")
+
+    try:
+        profile_file = Path.home() / ".profile"
+        content = profile_file.read_text(encoding="utf-8") if profile_file.exists() else ""
+        lines = [l for l in content.splitlines() if not l.startswith("export LANG=") and not l.startswith("export LC_MESSAGES=")]
+        lines.append(f'export LANG="{clean_loc}"')
+        lines.append(f'export LC_MESSAGES="{clean_loc}"')
+        profile_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    try:
+        label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == clean_loc), clean_loc)
+        subprocess.run(["notify-send", "-a", "Language Settings", "-i", "preferences-desktop-locale", "Idioma de usuario actualizado", f"{label}\nSe aplicará completamente al reiniciar la sesión."], capture_output=True, timeout=2)
+    except Exception:
+        pass
+
     notify_quickshell()
     print(json.dumps({"status": "user_locale_updated", "locale": clean_loc}))
 
@@ -386,18 +436,30 @@ def set_system_locale(loc):
     clean_loc = loc.strip()
     if not clean_loc:
         return
+    if not clean_loc.endswith(".UTF-8") and not clean_loc.endswith(".utf8") and clean_loc != "C":
+        clean_loc = f"{clean_loc}.UTF-8"
+
+    ensure_locale_generated(clean_loc)
+
     try:
         subprocess.run(["localectl", "set-locale", f"LANG={clean_loc}"], capture_output=True, timeout=3)
     except Exception:
         pass
+
     set_user_locale(clean_loc)
+
+    try:
+        label = next((l["label"] for l in POPULAR_LOCALES if l["locale"] == clean_loc), clean_loc)
+        subprocess.run(["notify-send", "-a", "Language Settings", "-i", "preferences-desktop-locale", "Idioma del sistema actualizado", f"{label} (localectl)."], capture_output=True, timeout=2)
+    except Exception:
+        pass
+
     print(json.dumps({"status": "system_locale_updated", "locale": clean_loc}))
 
 def notify_quickshell():
-    qml_path = os.path.expanduser("~/.config/quickshell/waybar-island/shell.qml")
-    cmd = ["quickshell", "ipc", "-p", qml_path, "--any-display", "call", "island", "reloadLanguage", ""]
+    cmd = ["quickshell", "ipc", "-c", "waybar-island", "call", "island", "reloadLanguage", ""]
     try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=0.8)
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=1.0)
     except Exception:
         pass
 
@@ -409,7 +471,13 @@ def main():
         if len(sys.argv) > 2:
             switch_layout(sys.argv[2])
         else:
-            run_hyprctl(["switchxkblayout", "at-translated-set-2-keyboard", "next"])
+            devs = get_devices()
+            kbs = devs.get("keyboards", [])
+            for k in kbs:
+                name = k.get("name")
+                if name:
+                    run_hyprctl(["switchxkblayout", name, "next"])
+            run_hyprctl(["switchxkblayout", "all", "next"])
             notify_quickshell()
             print(json.dumps({"status": "next"}))
     elif cmd == "add":

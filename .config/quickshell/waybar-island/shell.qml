@@ -2713,6 +2713,7 @@ ShellRoot {
             }
 
             property int subView: 0 // 0: Overview, 1: Add Layout, 2: Select Display Language
+            property int localeTarget: 0 // 0: User display language, 1: System language (localectl)
             property string layoutSearch: ""
             property string localeSearch: ""
 
@@ -3038,6 +3039,7 @@ ShellRoot {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
+                                langInputPanel.localeTarget = 0
                                 langInputPanel.subView = 2
                                 langInputPanel.localeSearch = ""
                             }
@@ -3084,6 +3086,7 @@ ShellRoot {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
+                                langInputPanel.localeTarget = 1
                                 langInputPanel.subView = 2
                                 langInputPanel.localeSearch = ""
                             }
@@ -3299,7 +3302,7 @@ ShellRoot {
                         }
 
                         Text {
-                            text: "Select Display Language"
+                            text: langInputPanel.localeTarget === 1 ? "Select System Language (localectl)" : "Select Display Language"
                             color: root.colFg
                             font.family: "JetBrainsMono Nerd Font"
                             font.pixelSize: 14
@@ -3422,7 +3425,11 @@ ShellRoot {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            root.runCmd("$HOME/.local/bin/notch-language-helper set_user_locale '" + modelData.locale + "'")
+                                            if (langInputPanel.localeTarget === 1) {
+                                                root.runCmd("$HOME/.local/bin/notch-language-helper set_system_locale '" + modelData.locale + "'")
+                                            } else {
+                                                root.runCmd("$HOME/.local/bin/notch-language-helper set_user_locale '" + modelData.locale + "'")
+                                            }
                                             langInputPanel.subView = 0
                                             langRefreshTimer.restart()
                                         }
