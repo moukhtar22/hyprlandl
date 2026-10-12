@@ -196,12 +196,13 @@
       "▇",
       "█"
     ],
-    "on-click": "blueman-manager"
+    "on-click": "quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon"
   },
   "memory": {
     "interval": 5,
     "format": "󰘚 {used:0.1f}G/{total:0.1f}G",
-    "tooltip-format": "Memory"
+    "tooltip-format": "Memory",
+    "on-click": "quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon"
   },
   "custom/uptime": {
     "format": "{}",
@@ -299,14 +300,16 @@
     "format-critical": "󰸁 {temperatureC}°C",
     "tooltip": true,
     "tooltip-format": "CPU Temperature: {temperatureC}°C",
-    "interval": 10
+    "interval": 10,
+    "on-click": "quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon"
   },
   "custom/nvidia-temp": {
     "format": "{}",
     "return-type": "json",
     "exec": "$HOME/.config/waybar/scripts/nvidia-temp.sh",
     "interval": 10,
-    "tooltip": true
+    "tooltip": true,
+    "on-click": "quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon"
   },
   "custom/cava": {
     "format": "{}",

@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+import os
+import sys
+import glob
+import json
+import time
+import shutil
+import subprocess
+
+def get_cpu_info():
+    model = "Unknown Processor"
+    cores_count = os.cpu_count() or 1
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if "model name" in line:
+                    model = line.split(":", 1)[1].strip()
+                    break
+    except Exception:
+        pass
+
+    # Frequency
+    freq_ghz = 0.0
+    try:
+        freqs = []
+        for p in glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"):
+            with open(p) as f:
+                freqs.append(int(f.read().strip()) / 1000)
+        if freqs:
+            freq_ghz = round((sum(freqs) / len(freqs)) / 1000, 2)
+    except Exception:
+        pass
+
+    # CPU temperature
+    temp_c = 0
+    # Prefer k10temp or coretemp
+    for p in glob.glob("/sys/class/hwmon/hwmon*/temp*_input"):
+        try:
+            name_file = os.path.join(os.path.dirname(p), "name")
+            sensor_name = ""
+            if os.path.exists(name_file):
+                with open(name_file) as f:
+                    sensor_name = f.read().strip().lower()
+            if sensor_name in ("k10temp", "coretemp", "cpu_thermal", "zenpower") or "k10temp" in sensor_name:
+                with open(p) as f:
+                    temp_c = int(int(f.read().strip()) / 1000)
+                    break
+        except Exception:
+            pass
+
+    if temp_c == 0:
+        # Fallback to any hwmon temp sensor between 20C and 110C
+        for p in glob.glob("/sys/class/hwmon/hwmon*/temp*_input"):
+            try:
+                with open(p) as f:
+                    t = int(int(f.read().strip()) / 1000)
+                    if 25 <= t <= 105:
+                        temp_c = t
+                        break
+            except Exception:
+                pass
+
+    # CPU deltas for overall and per-core usage
+    curr = {}
+    try:
+        with open("/proc/stat") as f:
+            for line in f:
+                if line.startswith("cpu"):
+                    parts = line.split()
+                    name = parts[0]
+                    vals = [int(x) for x in parts[1:8]]
+                    idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
+                    total = sum(vals)
+                    curr[name] = {"idle": idle, "total": total}
+    except Exception:
+        pass
+
+    prev = {}
+    cache_file = "/dev/shm/notch_cpu_stat.json"
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file) as f:
+                prev = json.load(f)
+        except Exception:
+            pass
+
+    try:
+        with open(cache_file, "w") as f:
+            json.dump(curr, f)
+    except Exception:
+        pass
+
+    pcts = {}
+    for k, v in curr.items():
+        if k in prev:
+            d_total = v["total"] - prev[k]["total"]
+            d_idle = v["idle"] - prev[k]["idle"]
+            if d_total > 0:
+                pcts[k] = max(0, min(100, int(round((1.0 - (d_idle / d_total)) * 100))))
+            else:
+                pcts[k] = 0
+        else:
+            pcts[k] = 0
+
+    total_pct = pcts.get("cpu", 0)
+    # If delta wasn't ready yet, use load average fallback
+    if total_pct == 0 and not prev:
+        try:
+            load1, _, _ = os.getloadavg()
+            total_pct = min(100, max(1, int(round((load1 / cores_count) * 100))))
+        except Exception:
+            total_pct = 5
+
+    cores = []
+    for i in range(cores_count):
+        cname = f"cpu{i}"
+        cores.append({
+            "id": i,
+            "pct": pcts.get(cname, total_pct)
+        })
+
+    return {
+        "model": model,
+        "cores_count": cores_count,
+        "total_pct": total_pct,
+        "freq_ghz": freq_ghz,
+        "temp_c": temp_c,
+        "cores": cores
+    }
+
+def get_mem_info():
+    mem = {}
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                p = line.split(":")
+                if len(p) == 2:
+                    mem[p[0].strip()] = int(p[1].strip().split()[0])
+    except Exception:
+        pass
+
+    total_ram = mem.get("MemTotal", 0) / 1024 / 1024
+    avail_ram = mem.get("MemAvailable", 0) / 1024 / 1024
+    used_ram = max(0.0, total_ram - avail_ram)
+    ram_pct = int(round((used_ram / total_ram) * 100)) if total_ram else 0
+
+    total_swap = mem.get("SwapTotal", 0) / 1024 / 1024
+    free_swap = mem.get("SwapFree", 0) / 1024 / 1024
+    used_swap = max(0.0, total_swap - free_swap)
+    swap_pct = int(round((used_swap / total_swap) * 100)) if total_swap else 0
+
+    return {
+        "ram": {
+            "total_gb": round(total_ram, 1),
+            "used_gb": round(used_ram, 1),
+            "free_gb": round(avail_ram, 1),
+            "pct": ram_pct,
+            "str": f"{used_ram:.1f}G / {total_ram:.1f}G"
+        },
+        "swap": {
+            "total_gb": round(total_swap, 1),
+            "used_gb": round(used_swap, 1),
+            "pct": swap_pct,
+            "str": f"{used_swap:.1f}G / {total_swap:.1f}G" if total_swap > 0 else "None"
+        },
+        "total_ram_mb": int(round(total_ram * 1024))
+    }
+
+def get_disk_info():
+    try:
+        total, used, free = shutil.disk_usage("/")
+        total_gb = int(round(total / (1024**3)))
+        used_gb = int(round(used / (1024**3)))
+        free_gb = int(round(free / (1024**3)))
+        pct = int(round((used / total) * 100)) if total else 0
+    except Exception:
+        total_gb, used_gb, free_gb, pct = 512, 0, 512, 0
+
+    return {
+        "total_gb": total_gb,
+        "used_gb": used_gb,
+        "free_gb": free_gb,
+        "pct": pct,
+        "str": f"{used_gb}G / {total_gb}G ({pct}%)"
+    }
+
+def get_gpu_info():
+    info = {
+        "has_nvidia": False,
+        "nvidia_name": "NVIDIA GPU",
+        "nvidia_temp": 0,
+        "nvidia_util": 0,
+        "nvidia_vram_used": 0,
+        "nvidia_vram_total": 0,
+        "amd_temp": 0
+    }
+
+    # AMD iGPU temp
+    for p in glob.glob("/sys/class/hwmon/hwmon*/temp*_input"):
+        try:
+            name_file = os.path.join(os.path.dirname(p), "name")
+            if os.path.exists(name_file):
+                with open(name_file) as f:
+                    if "amdgpu" in f.read().strip().lower():
+                        with open(p) as tf:
+                            info["amd_temp"] = int(int(tf.read().strip()) / 1000)
+                            break
+        except Exception:
+            pass
+
+    # NVIDIA
+    try:
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=gpu_name,temperature.gpu,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=1
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            parts = [x.strip() for x in res.stdout.strip().split(",")]
+            if len(parts) >= 5:
+                info["has_nvidia"] = True
+                info["nvidia_name"] = parts[0]
+                info["nvidia_temp"] = int(parts[1]) if parts[1].isdigit() else 0
+                info["nvidia_util"] = int(parts[2]) if parts[2].isdigit() else 0
+                info["nvidia_vram_used"] = int(parts[3]) if parts[3].isdigit() else 0
+                info["nvidia_vram_total"] = int(parts[4]) if parts[4].isdigit() else 0
+    except Exception:
+        pass
+
+    return info
+
+def get_system_summary():
+    uptime_str = "0m"
+    try:
+        with open("/proc/uptime") as f:
+            up_secs = int(float(f.read().split()[0]))
+        hours = up_secs // 3600
+        mins = (up_secs % 3600) // 60
+        uptime_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+    except Exception:
+        pass
+
+    kernel = "Linux"
+    try:
+        kernel = os.uname().release
+    except Exception:
+        pass
+
+    return {
+        "uptime": uptime_str,
+        "kernel": kernel
+    }
+
+def get_processes(total_ram_mb):
+    my_pid = str(os.getpid())
+    
+    def parse_ps(sort_arg, limit=6):
+        try:
+            cmd = ["ps", "-eo", "pid,%cpu,%mem,comm,user", f"--sort={sort_arg}", "--no-headers"]
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=1)
+            lines = [l.strip() for l in res.stdout.strip().split("\n") if l.strip()]
+            procs = []
+            for l in lines:
+                parts = l.split(None, 4)
+                if len(parts) >= 5:
+                    pid, cpu, mem, name, user = parts[0], float(parts[1]), float(parts[2]), parts[3], parts[4]
+                    if pid == my_pid:
+                        continue
+                    mem_mb = int(round(mem * total_ram_mb / 100))
+                    mem_str = f"{mem_mb} MB" if mem_mb < 1024 else f"{mem_mb/1024:.1f} GB"
+                    procs.append({
+                        "pid": pid,
+                        "name": name,
+                        "cpu": round(cpu, 1),
+                        "mem": round(mem, 1),
+                        "mem_str": mem_str,
+                        "user": user
+                    })
+                    if len(procs) >= limit:
+                        break
+            return procs
+        except Exception:
+            return []
+
+    return {
+        "cpu": parse_ps("-%cpu", 6),
+        "mem": parse_ps("-%mem", 6)
+    }
+
+def main():
+    cpu_data = get_cpu_info()
+    mem_data = get_mem_info()
+    disk_data = get_disk_info()
+    gpu_data = get_gpu_info()
+    sys_data = get_system_summary()
+    procs = get_processes(mem_data["total_ram_mb"])
+
+    result = {
+        "cpu": cpu_data,
+        "ram": mem_data["ram"],
+        "swap": mem_data["swap"],
+        "disk": disk_data,
+        "gpu": gpu_data,
+        "system": sys_data,
+        "procs_cpu": procs["cpu"],
+        "procs_mem": procs["mem"]
+    }
+    print(json.dumps(result))
+
+if __name__ == "__main__":
+    main()

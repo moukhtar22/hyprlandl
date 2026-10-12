@@ -473,6 +473,7 @@ hl.bind("ALT + Return", hl.dsp.exec_cmd("hyprctl eval 'hl.dispatch(hl.dsp.window
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + G", hl.dsp.exec_cmd("~/.local/bin/gpu-selector"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle_performance.sh"))
+hl.bind(mainMod .. " + H", hl.dsp.exec_cmd("quickshell ipc -p ~/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon"))
 hl.bind(mainMod .. " + BackSpace", hl.dsp.exec_cmd("~/.local/bin/powermenu-with-monitor-detection"))
 hl.bind(mainMod .. " + XF86Back", hl.dsp.exec_cmd("~/.local/bin/pywal-wallpaper-sync"))
 hl.bind(mainMod .. " + Prior", hl.dsp.exec_cmd("~/.local/bin/pywal-wallpaper-sync"))
