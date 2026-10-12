@@ -517,14 +517,18 @@ run_cmd() {
             fi
         elif [[ $1 == '--logout' ]]; then
             if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-                # Hyprland con config Lua: el dispatcher legacy "exit" ya no existe,
-                # se usa la API de lua (igual que SUPER+M) y se cae a lo viejo.
-                hyprctl eval 'hl.dsp.exit()' >/dev/null 2>&1 \
-                    || hyprctl dispatch exit >/dev/null 2>&1 \
+                # Hyprland con config Lua: se debe ejecutar mediante hl.dispatch
+                hyprctl eval 'hl.dispatch(hl.dsp.exit())' >/dev/null 2>&1 \
+                    || hyprctl dispatch 'hl.dsp.exit()' >/dev/null 2>&1 \
+                    || loginctl terminate-user "$USER" 2>/dev/null \
                     || loginctl terminate-session "${XDG_SESSION_ID:-}" 2>/dev/null \
                     || pkill -x Hyprland
             elif [[ "$XDG_CURRENT_DESKTOP" == "Hyprland" ]]; then
-                hyprctl dispatch exit 2>/dev/null || loginctl terminate-session "${XDG_SESSION_ID:-}" 2>/dev/null || pkill -x Hyprland
+                hyprctl eval 'hl.dispatch(hl.dsp.exit())' 2>/dev/null \
+                    || hyprctl dispatch 'hl.dsp.exit()' 2>/dev/null \
+                    || loginctl terminate-user "$USER" 2>/dev/null \
+                    || loginctl terminate-session "${XDG_SESSION_ID:-}" 2>/dev/null \
+                    || pkill -x Hyprland
             elif [[ "$DESKTOP_SESSION" == 'openbox' ]]; then
                 openbox --exit
             elif [[ "$DESKTOP_SESSION" == 'bspwm' ]]; then
