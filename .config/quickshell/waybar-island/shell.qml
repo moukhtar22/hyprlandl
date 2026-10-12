@@ -139,6 +139,37 @@ ShellRoot {
         panel.expanded = false
         panel.sysMonExpanded = false
         panel.langInputExpanded = true
+        panel.langInputSubView = 0
+        langProc.running = true
+        return "opened"
+    }
+
+    function openLanguageLocales(screenName) {
+        let panel = root.panelForScreen(screenName)
+        if (!panel) {
+            let names = Object.keys(root.islandPanels)
+            if (names.length) panel = root.islandPanels[names[0]]
+        }
+        if (!panel) return "unavailable"
+        panel.expanded = false
+        panel.sysMonExpanded = false
+        panel.langInputExpanded = true
+        panel.langInputSubView = 2
+        langProc.running = true
+        return "opened"
+    }
+
+    function openLanguageLayouts(screenName) {
+        let panel = root.panelForScreen(screenName)
+        if (!panel) {
+            let names = Object.keys(root.islandPanels)
+            if (names.length) panel = root.islandPanels[names[0]]
+        }
+        if (!panel) return "unavailable"
+        panel.expanded = false
+        panel.sysMonExpanded = false
+        panel.langInputExpanded = true
+        panel.langInputSubView = 1
         langProc.running = true
         return "opened"
     }
@@ -785,6 +816,12 @@ ShellRoot {
         }
         function openLanguageInput(screenName: string): string {
             return root.openLanguageInput(screenName)
+        }
+        function openLanguageLocales(screenName: string): string {
+            return root.openLanguageLocales(screenName)
+        }
+        function openLanguageLayouts(screenName: string): string {
+            return root.openLanguageLayouts(screenName)
         }
         function closeLanguageInput(screenName: string): string {
             let panel = root.panelForScreen(screenName)
@@ -8218,6 +8255,7 @@ ShellRoot {
             property bool expanded: false
             property bool sysMonExpanded: false
             property bool langInputExpanded: false
+            property alias langInputSubView: langInputPanel.subView
             property string sysMonProcTab: "cpu"
             property int currentTab: 0
             property int controlSubView: 0
