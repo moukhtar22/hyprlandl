@@ -165,18 +165,28 @@ def get_devices():
     except Exception:
         return {}
 
+def is_real_keyboard(k):
+    name = (k.get("name") or "").lower()
+    ignore = ["avrcp", "video-bus", "power-button", "sleep-button", "hotkeys", "stream-deck", "consumer-control", "system-control"]
+    return not any(ig in name for ig in ignore)
+
 def get_primary_keyboard():
     devs = get_devices()
     kbs = devs.get("keyboards", [])
     if not kbs:
         return None
-    kb = next((k for k in kbs if k.get("main")), None)
+    real_kbs = [k for k in kbs if is_real_keyboard(k)]
+    if not real_kbs:
+        real_kbs = kbs
+    kb = next((k for k in real_kbs if k.get("main")), None)
     if not kb:
-        kb = next((k for k in kbs if "wooting" in k.get("name", "").lower()), None)
+        kb = next((k for k in real_kbs if "wooting" in k.get("name", "").lower()), None)
     if not kb:
-        kb = next((k for k in kbs if k.get("name") == "at-translated-set-2-keyboard"), None)
+        kb = next((k for k in real_kbs if "asus" in k.get("name", "").lower()), None)
     if not kb:
-        kb = next((k for k in kbs if k.get("layout")), kbs[0])
+        kb = next((k for k in real_kbs if k.get("name") == "at-translated-set-2-keyboard"), None)
+    if not kb:
+        kb = next((k for k in real_kbs if k.get("layout")), real_kbs[0])
     return kb
 
 def get_current_hotkey(options_str):
@@ -309,6 +319,8 @@ def switch_layout(target):
     kb = get_primary_keyboard()
     layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
     layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+    if not layout_codes:
+        layout_codes = ["us"]
 
     target_idx = 0
     try:
@@ -323,19 +335,12 @@ def switch_layout(target):
 
     target_code = layout_codes[target_idx]
 
-    # Reorder layout list so selected layout is first (survives reboot natively)
-    reordered = [target_code] + [c for c in layout_codes if c != target_code]
-    reordered_str = ",".join(reordered)
-
-    hypr_eval(f'hl.config({{ input = {{ kb_layout = "{reordered_str}" }} }})')
-    persist_hyprland_config(new_layouts_str=reordered_str)
-
-    # Switch every detected keyboard to layout 0 (the new primary)
+    # Switch every detected keyboard to target_idx
     for k in kbs:
         name = k.get("name")
         if name:
-            run_hyprctl(["switchxkblayout", name, "0"])
-    run_hyprctl(["switchxkblayout", "all", "0"])
+            run_hyprctl(["switchxkblayout", name, str(target_idx)])
+    run_hyprctl(["switchxkblayout", "all", str(target_idx)])
 
     try:
         state_file = Path.home() / ".config/hypr/active_layout"
@@ -344,7 +349,47 @@ def switch_layout(target):
         pass
 
     notify_quickshell()
-    print(json.dumps({"status": "switched", "index": 0, "code": target_code, "layouts": reordered}))
+    print(json.dumps({"status": "switched", "index": target_idx, "code": target_code, "layouts": layout_codes}))
+
+def switch_next():
+    devs = get_devices()
+    kbs = devs.get("keyboards", [])
+    kb = get_primary_keyboard()
+    layouts_raw = (kb.get("layout", "us") if kb else "us") or "us"
+    layout_codes = [c.strip().lower() for c in layouts_raw.split(",") if c.strip()]
+    if not layout_codes:
+        layout_codes = ["us"]
+
+    cur_idx = kb.get("active_layout_index", 0) if kb else 0
+    next_idx = (cur_idx + 1) % len(layout_codes)
+    next_code = layout_codes[next_idx]
+
+    for k in kbs:
+        name = k.get("name")
+        if name:
+            run_hyprctl(["switchxkblayout", name, str(next_idx)])
+    run_hyprctl(["switchxkblayout", "all", str(next_idx)])
+
+    try:
+        state_file = Path.home() / ".config/hypr/active_layout"
+        state_file.write_text(next_code, encoding="utf-8")
+    except Exception:
+        pass
+
+    notify_quickshell()
+    print(json.dumps({"status": "switched", "index": next_idx, "code": next_code, "layouts": layout_codes}))
+
+def restore_layout():
+    try:
+        state_file = Path.home() / ".config/hypr/active_layout"
+        if state_file.exists():
+            target_code = state_file.read_text(encoding="utf-8").strip().lower()
+            if target_code:
+                switch_layout(target_code)
+                return
+    except Exception:
+        pass
+    switch_layout(0)
 
 def add_layout(code):
     clean_code = code.strip().lower()
@@ -472,29 +517,28 @@ def set_system_locale(loc):
     print(json.dumps({"status": "system_locale_updated", "locale": clean_loc}))
 
 def notify_quickshell():
-    cmd = ["quickshell", "ipc", "-c", "waybar-island", "call", "island", "reloadLanguage", ""]
-    try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=1.0)
-    except Exception:
-        pass
+    qs_path = str(Path.home() / ".config/quickshell/waybar-island/shell.qml")
+    for cmd in [
+        ["quickshell", "-p", qs_path, "ipc", "call", "island", "reloadLanguage", ""],
+        ["quickshell", "ipc", "-c", "waybar-island", "call", "island", "reloadLanguage", ""]
+    ]:
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, timeout=0.8)
+            break
+        except Exception:
+            pass
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "status":
         print(json.dumps(get_status()))
     elif cmd == "switch":
-        if len(sys.argv) > 2:
+        if len(sys.argv) > 2 and sys.argv[2] != "next":
             switch_layout(sys.argv[2])
         else:
-            devs = get_devices()
-            kbs = devs.get("keyboards", [])
-            for k in kbs:
-                name = k.get("name")
-                if name:
-                    run_hyprctl(["switchxkblayout", name, "next"])
-            run_hyprctl(["switchxkblayout", "all", "next"])
-            notify_quickshell()
-            print(json.dumps({"status": "next"}))
+            switch_next()
+    elif cmd == "restore":
+        restore_layout()
     elif cmd == "add":
         if len(sys.argv) > 2:
             add_layout(sys.argv[2])

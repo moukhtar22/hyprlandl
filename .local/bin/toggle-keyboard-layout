@@ -1,55 +1,24 @@
 #!/bin/bash
-# Cambia al siguiente layout de teclado, usando los que el usuario haya
-# configurado en Hyprland (input.kb_layout, aqui "us,es").
-#
-# Antes este guion tenia tres nombres de teclado escritos a mano:
-#
-#     switchxkblayout "wooting-wooting-60he-(arm)" next
-#     switchxkblayout "asus-keyboard" next
-#     switchxkblayout "at-translated-set-2-keyboard" next
-#
-# Dos problemas. "asus-keyboard" no existe en esta maquina, asi que esa linea
-# fallaba en silencio. Y el teclado real del portatil,
-# "asustek-computer-inc.-n-key-device", no estaba en la lista.
-#
-# Hyprland aplica el mismo kb_layout a todos los dispositivos, asi que "all" cubre
-# todos los teclados y no hay que conocer ningun nombre. El indice activo avanza
-# solo en el teclado real, pero todos informan el mismo, que es lo que lee
-# kb-layout para la abreviatura del panel.
-
+# Cambia al siguiente layout de teclado sincronizando todos los teclados reales (Wooting, laptop, etc.)
 set -u
 
-# Leer el layout actual ANTES de cambiarlo, para avisar del nuevo y no del viejo.
-antes=$(hyprctl devices -j 2>/dev/null | jq -r '.keyboards[] | select(.main==true) | .active_layout_index' 2>/dev/null)
-[ -n "$antes" ] || antes=$(hyprctl devices -j 2>/dev/null | jq -r '.keyboards[0].active_layout_index' 2>/dev/null)
+res=$("$HOME/.local/bin/notch-language-helper" switch 2>/dev/null || echo "")
 
-# Cambia el MISMO teclado que leen kb-layout y el modulo de waybar. Con "all"
-# tambien se avanzan los teclados virtuales, que no son los de verdad y no
-# siguen al resto: el teclado real volvia a US mientras el indicador se quedaba
-# en ES.
-KB_TARGET="at-translated-set-2-keyboard"
-if ! hyprctl devices -j 2>/dev/null | jq -e --arg n "$KB_TARGET" '.keyboards[] | select(.name == $n)' >/dev/null 2>&1; then
-    KB_TARGET="all"
-fi
-hyprctl switchxkblayout "$KB_TARGET" next >/dev/null 2>&1 || true
+code=$(python3 -c "
+import json, sys
+try:
+    data = json.loads('''$res''')
+    print(data.get('code', '').upper())
+except Exception:
+    sys.exit(0)
+" 2>/dev/null)
 
-sleep 0.2
-
-nuevo=$("$HOME/.local/bin/kb-layout" 2>/dev/null || echo "")
-
-# SIN notificacion, a proposito.
-#
-# La isla es el servidor de notificaciones, y cuando le llega una entra en modo
-# notificacion:
-#
-#     width: islandWin.expanded ? 660 : (root.notifActive ? 460 : ...)
-#
-# Al pulsar el chip del teclado se encogia entera de 660 a 460 px. El aviso era
-# ademas redundante, porque el chip ya muestra el layout nuevo en el sitio.
-#
-# Con --notify se recupera, para quien la quiera de verdad.
-if [ "${1:-}" = "--notify" ] && command -v notify-send >/dev/null 2>&1 && [ -n "$nuevo" ]; then
-    notify-send "Teclado" "$nuevo" -t 1200 -i input-keyboard >/dev/null 2>&1 || true
+if [ -z "$code" ]; then
+    code=$("$HOME/.local/bin/kb-layout" 2>/dev/null || echo "")
 fi
 
-echo "${nuevo:-desconocido}"
+if [ "${1:-}" = "--notify" ] && command -v notify-send >/dev/null 2>&1 && [ -n "$code" ]; then
+    notify-send "Teclado" "$code" -t 1200 -i input-keyboard >/dev/null 2>&1 || true
+fi
+
+echo "${code:-desconocido}"
