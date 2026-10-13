@@ -322,7 +322,7 @@ print(f\"{bars}|{overall_pct}\")
                         is_charging=1
                     fi
                     bname=\$(basename \"\$b\")
-                    [ -n \"\$bat_caps\" ] && bat_caps=\"\$bat_caps \"
+                    [ -n \"\$bat_caps\" ] && bat_caps=\"\$bat_caps · \"
                     bat_caps=\"\${bat_caps}\${bname}: \${c}%\"
                 fi
             done
@@ -1111,10 +1111,10 @@ print(f\"{bars}|{overall_pct}\")
                                 font.pixelSize: 14
                             }
                             Text {
-                                text: !barWin.hasBattery ? "CA" : (barWin.batPercent + "%")
+                                text: !barWin.hasBattery ? "CA" : ((barWin.batDual && barWin.batDetail) ? barWin.batDetail : (barWin.batPercent + "%"))
                                 color: !barWin.hasBattery ? barWin.colBattery : ((barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
                                 font.family: "JetBrainsMono Nerd Font"
-                                font.pixelSize: 13
+                                font.pixelSize: barWin.batDual ? 11 : 13
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -1126,7 +1126,7 @@ print(f\"{bars}|{overall_pct}\")
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 const scrName = (barWin.screen && barWin.screen.name) ? barWin.screen.name : ""
-                                barWin.run("quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon '" + scrName + "' || $HOME/.local/bin/power-profile-toggle 2>/dev/null || true")
+                                barWin.run("quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleBattery '" + scrName + "' || quickshell ipc -p $HOME/.config/quickshell/waybar-island/shell.qml --any-display call island toggleSysMon '" + scrName + "' || true")
                             }
                         }
                     }

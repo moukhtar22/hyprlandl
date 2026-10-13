@@ -149,6 +149,27 @@ ShellRoot {
         return "opened"
     }
 
+    function toggleBattery(screenName) {
+        let panel = root.panelForScreen(screenName)
+        if (panel && panel.expanded && panel.currentTab === 1 && panel.controlSubView === 7) {
+            root.setPanelState(screenName, false)
+            return "collapsed"
+        }
+        let p = root.setPanelState(screenName, true, 1, 7)
+        if (!p) return "unavailable"
+        battProc.running = true
+        root.refreshAllStates()
+        return "battery"
+    }
+
+    function openBattery(screenName) {
+        let p = root.setPanelState(screenName, true, 1, 7)
+        if (!p) return "unavailable"
+        battProc.running = true
+        root.refreshAllStates()
+        return "battery"
+    }
+
     property var workspacesData: ({ active_id: 1, next_id: 2, count: 0, workspaces: [] })
 
     ListModel {
@@ -810,6 +831,12 @@ ShellRoot {
             langProc.running = true
             kbProc.running = true
             return "reloaded"
+        }
+        function toggleBattery(screenName: string): string {
+            return root.toggleBattery(screenName)
+        }
+        function openBattery(screenName: string): string {
+            return root.openBattery(screenName)
         }
         function openOta(screenName: string): string {
             let current = root.panelForScreen(screenName)
@@ -13920,9 +13947,9 @@ ShellRoot {
                             }
                             Text {
                                 text: (root.batt?.count ?? 0) > 1
-                                    ? (root.batt.count) + " " + root.t("bat_devices", "devices") + " · " + (root.batt.total_pct ?? 0) + "% · "
-                                      + ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery"))
-                                      + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles"))
+                                    ? ((root.batt?.devices ?? []).map(d => (d.name || "BAT") + ": " + (d.capacity ?? 0) + "%").join(" · ") + " (" + (root.batt.total_pct ?? 0) + "% total) · "
+                                       + ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery"))
+                                       + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles")))
                                     : ((root.batt?.count ?? 0) === 1
                                         ? ((root.batt?.total_pct ?? 0) + "% · " + ((root.batt?.ac?.online) ? ((root.batt?.is_charging) ? root.t("bat_charging", "Charging") : root.t("bat_ac_online", "AC Mains Online")) : root.t("bat_on_battery", "On battery"))
                                           + " · " + ((root.batt?.total_cycles ?? 0) + " " + root.t("bat_cycles", "cycles")))
