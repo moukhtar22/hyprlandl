@@ -344,7 +344,7 @@ login by `rhythm-battery-limit.service`, because the kernel does not keep
 
 ---
 
-## 💖 Support & Sponsor
+## Support & Sponsor
 
 If you find this project useful and would like to support its development and maintenance:
 
