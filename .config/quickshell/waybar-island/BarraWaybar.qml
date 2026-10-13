@@ -306,6 +306,9 @@ print(f\"{bars}|{overall_pct}\")
                     if [ -f \"\$b/scope\" ] && grep -qi \"device\" \"\$b/scope\"; then
                         continue
                     fi
+                    if [ -f \"\$b/present\" ] && [ \"\$(cat \"\$b/present\" 2>/dev/null)\" = \"0\" ]; then
+                        continue
+                    fi
                     has_b=1
                     bat_count=\$((bat_count + 1))
                     c=\$(cat \"\$b/capacity\" 2>/dev/null || echo 0)
@@ -322,8 +325,8 @@ print(f\"{bars}|{overall_pct}\")
                         is_charging=1
                     fi
                     bname=\$(basename \"\$b\")
-                    [ -n \"\$bat_caps\" ] && bat_caps=\"\$bat_caps · \"
-                    bat_caps=\"\${bat_caps}\${bname}: \${c}%\"
+                    [ -n \"\$bat_caps\" ] && bat_caps=\"\$bat_caps │ \"
+                    bat_caps=\"\${bat_caps}\${c}%\"
                 fi
             done
 
@@ -331,7 +334,10 @@ print(f\"{bars}|{overall_pct}\")
             for a in /sys/class/power_supply/*; do
                 [ -d \"\$a\" ] || continue
                 atype=\$(cat \"\$a/type\" 2>/dev/null || true)
-                if [ \"\$atype\" = \"Mains\" ] || [ \"\$atype\" = \"USB\" ] || [[ \"\$a\" =~ (AC|ADP|ACAD) ]]; then
+                if [ \"\$atype\" = \"Mains\" ] || [ \"\$atype\" = \"USB\" ] || [ \"\$atype\" = \"USB_PD\" ] || [ \"\$atype\" = \"USB_C\" ] || [[ \"\$a\" =~ (AC|ADP|ACAD) ]]; then
+                    if [ -f \"\$a/scope\" ] && grep -qi \"device\" \"\$a/scope\"; then
+                        continue
+                    fi
                     if [ \"\$(cat \"\$a/online\" 2>/dev/null)\" = \"1\" ]; then
                         ac_online=1
                         break
@@ -418,15 +424,17 @@ print(f\"{bars}|{overall_pct}\")
                         barWin.cpuTempStr = p[3] || "󰔏 58°C"
                         barWin.gpuTempStr = p[4] || "󰔏 51°C"
 
-                        barWin.batPercent = parseInt(p[5]) || 0
-                        const bStatus = p[6] || "Discharging"
-                        barWin.batCharging = (bStatus === "Charging")
-                        barWin.batPlugged = (bStatus === "Plugged" || bStatus === "AC")
-                        const batCount = (p.length >= 22) ? (parseInt(p[21]) || 1) : 1
+                        if (p.length >= 21) barWin.hasBattery = (p[20] === "1")
+                        const batCount = (p.length >= 22) ? (parseInt(p[21]) || 0) : (barWin.hasBattery ? 1 : 0)
                         barWin.batDual = (batCount >= 2)
                         barWin.batDetail = (p.length >= 23) ? p[22] : ""
 
-                        if (!barWin.hasBattery || bStatus === "AC") {
+                        barWin.batPercent = parseInt(p[5]) || 0
+                        const bStatus = p[6] || (barWin.hasBattery ? "Discharging" : "AC")
+                        barWin.batCharging = (bStatus === "Charging")
+                        barWin.batPlugged = (bStatus === "Plugged")
+
+                        if (!barWin.hasBattery || batCount === 0 || bStatus === "AC") {
                             barWin.batIcon = "󰚥"
                         } else if (barWin.batCharging || barWin.batPlugged) {
                             barWin.batIcon = "󰂄"
@@ -460,8 +468,6 @@ print(f\"{bars}|{overall_pct}\")
                         barWin.isWifiEnabled = (p[17] === "1")
                         barWin.wifiSignal = parseInt(p[18]) || 0
                         barWin.wifiSsid = p[19] || ""
-
-                        if (p.length >= 21) barWin.hasBattery = (p[20] === "1")
                     }
                 } catch(e) {}
             }
@@ -1093,7 +1099,7 @@ print(f\"{bars}|{overall_pct}\")
                         RowLayout {
                             id: batRow
                             anchors.centerIn: parent
-                            spacing: 6
+                            spacing: barWin.hasBattery ? 6 : 0
                             Text {
                                 text: !barWin.hasBattery ? "󰚥" : barWin.batIcon
                                 color: !barWin.hasBattery ? barWin.colBattery : ((barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
@@ -1101,8 +1107,9 @@ print(f\"{bars}|{overall_pct}\")
                                 font.pixelSize: 14
                             }
                             Text {
-                                text: !barWin.hasBattery ? "CA" : ((barWin.batDual && barWin.batDetail) ? barWin.batDetail : (barWin.batPercent + "%"))
-                                color: !barWin.hasBattery ? barWin.colBattery : ((barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery))
+                                visible: barWin.hasBattery
+                                text: (barWin.batDual && barWin.batDetail) ? barWin.batDetail : (barWin.batPercent + "%")
+                                color: (barWin.batCharging || barWin.batPlugged) ? barWin.colRam : (barWin.batPercent <= 15 ? barWin.colCpu : barWin.colBattery)
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: barWin.batDual ? 11 : 13
                                 font.weight: Font.DemiBold

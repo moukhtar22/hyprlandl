@@ -52,6 +52,10 @@ def battery(name: str, ac_online: bool = False) -> dict:
     def g(f):
         return read(os.path.join(d, f))
 
+    scope = g("scope")
+    if scope and "device" in scope.lower():
+        return {"present": False}
+
     cap = num(g("capacity"))
     energy_now = num(g("energy_now"))
     energy_full = num(g("energy_full"))
@@ -183,6 +187,9 @@ def main() -> None:
 
     ac = {"present": False, "online": False}
     for n in entries:
+        scope = read(os.path.join(BASE, n, "scope"))
+        if scope and "device" in scope.lower():
+            continue
         t = read(os.path.join(BASE, n, "type"))
         if t in ("Mains", "USB", "USB_PD", "USB_C") or n.startswith(("AC", "ADP", "ACAD")):
             ac["present"] = True
