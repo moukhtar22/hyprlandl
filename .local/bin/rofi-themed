@@ -31,6 +31,19 @@ if ! locale >/dev/null 2>&1; then
     export LC_ALL="C.UTF-8"
 fi
 
+# Limpiar pidfile huerfano o conmutar rofi si ya esta abierto
+pid_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/rofi.pid"
+if [ -f "$pid_file" ]; then
+    old_pid=$(cat "$pid_file" 2>/dev/null)
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        kill "$old_pid" 2>/dev/null || true
+        rm -f "$pid_file" 2>/dev/null || true
+        exit 0
+    else
+        rm -f "$pid_file" 2>/dev/null || true
+    fi
+fi
+
 args=("$@")
 
 # En modo normal no se toca el fondo: cada menu se queda con el suyo, que es como
