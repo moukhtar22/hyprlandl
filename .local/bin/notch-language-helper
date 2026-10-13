@@ -335,8 +335,13 @@ def ensure_locale_generated(loc):
         if any(clean in a or a in clean for a in available):
             return True
         base = loc.split(".")[0].split("@")[0]
+        charmap = "UTF-8" if "utf" in loc.lower() else "ISO-8859-1"
+        try:
+            subprocess.run(["sudo", "localedef", "-i", base, "-f", charmap, loc], timeout=5)
+        except Exception:
+            pass
         subprocess.run(["sudo", "sed", "-i", "-E", f"s/^#[[:space:]]*({re.escape(loc)}|{re.escape(base)})([[:space:]]+.*)/\\1\\2/", "/etc/locale.gen"], timeout=3)
-        subprocess.run(["sudo", "locale-gen"], timeout=6)
+        subprocess.run(["sudo", "locale-gen"], timeout=35)
         return True
     except Exception:
         return False

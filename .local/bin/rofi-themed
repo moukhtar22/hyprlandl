@@ -26,6 +26,11 @@
 # el contenido cambia.
 "$HOME/.local/bin/rofi-colors" 2>/dev/null || true
 
+# Asegurar locale UTF-8 valido para evitar que rofi falle con 'Failed to set locale'
+if ! locale >/dev/null 2>&1; then
+    export LC_ALL="C.UTF-8"
+fi
+
 args=("$@")
 
 # En modo normal no se toca el fondo: cada menu se queda con el suyo, que es como
