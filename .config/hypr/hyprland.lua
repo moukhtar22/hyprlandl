@@ -419,6 +419,8 @@ hl.config({
         swallow_regex = "^(kitty)$",
         focus_on_activate = true,
         layers_hog_keyboard_focus = false,
+        mouse_move_enables_dpms = true,
+        key_press_enables_dpms = true,
     },
 })
 

@@ -46,19 +46,21 @@ esac
 command -v hyprctl >/dev/null 2>&1 || { echo "screen-power: hyprctl no esta" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "screen-power: jq no esta" >&2; exit 1; }
 
-# Los monitores se consultan una vez: si el script se queda sin monitors no
-# hay nada que apagar, y con dpms sin nombre el dispatcher no hace nada.
+# Monitores activos o fallback global
 monitores=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.disabled == false) | .name' 2>/dev/null)
-[ -n "$monitores" ] || { echo "screen-power: no hay monitores activos" >&2; exit 1; }
 
 fallos=0
-for m in $monitores; do
-    lua="hl.dispatch(hl.dsp.dpms('$estado', '$m'))"
-    if ! hyprctl repl "$lua" >/dev/null 2>&1 && ! hyprctl dispatch dpms "$estado" "$m" >/dev/null 2>&1; then
-        echo "screen-power: no se pudo poner $m en $estado" >&2
-        fallos=$((fallos + 1))
-    fi
-done
+if [ -n "$monitores" ]; then
+    for m in $monitores; do
+        lua="hl.dispatch(hl.dsp.dpms('$estado', '$m'))"
+        if ! hyprctl repl "$lua" >/dev/null 2>&1 && ! hyprctl dispatch "hl.dsp.dpms('$estado', '$m')" >/dev/null 2>&1; then
+            fallos=$((fallos + 1))
+        fi
+    done
+fi
+
+# Despacho global para asegurar todas las salidas
+hyprctl repl "hl.dispatch(hl.dsp.dpms('$estado'))" >/dev/null 2>&1 || hyprctl dispatch "hl.dsp.dpms('$estado')" >/dev/null 2>&1 || true
 
 [ "$estado" = "off" ] && echo "off" > "$FLAG" 2>/dev/null || rm -f "$FLAG" 2>/dev/null
 
