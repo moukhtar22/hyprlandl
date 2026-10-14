@@ -37,22 +37,33 @@ systemctl --user is-active --quiet "$UNIDAD" || { rm -f "$ESTADO" 2>/dev/null; e
 monitores=$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null | tr -cd '0-9')
 [ -n "$monitores" ] || monitores=1
 
+# Si un monitor tiene una ventana a pantalla completa (video, juego...), la isla
+# se oculta intencionadamente en ese monitor (visible: false destruye la capa).
+# Descontamos esos monitores para no considerar que la capa "se ha perdido".
+fs_monitores=$("$HOME/.local/bin/island-fullscreens" 2>/dev/null | jq 'keys | length' 2>/dev/null | tr -cd '0-9')
+[ -n "$fs_monitores" ] || fs_monitores=0
+
+esperadas=$(( monitores - fs_monitores ))
+[ "$esperadas" -lt 0 ] && esperadas=0
+
 # OJO con grep -c: cuando no encuentra nada imprime 0 Y devuelve codigo 1, asi que
 # con un "|| echo 0" detras la variable se queda con "0\n0", que no es un numero.
 # La comparacion "-ge" falla con "integer expected", la_if da falso y el script
-# "-" ", ", "-" " nunca reiniciaba. De ahi que el log dijera "sin capa (0" en una
-# linea y "0 de 2)" en la siguiente.
+# nunca reiniciaba.
 capas=$(hyprctl layers 2>/dev/null | grep -c "namespace: quickshell" | tr -cd '0-9')
 [ -n "$capas" ] || capas=0
 
-if [ "$capas" -ge "$monitores" ]; then
+if [ "$capas" -ge "$esperadas" ]; then
     rm -f "$ESTADO" 2>/dev/null
     exit 0
 fi
 
 # Primera vez que se ve mal: se anota y no se toca nada todavia. Asi se ignora el
 # margen de arranque, cuando la isla tarda un momento en aparecer.
-veces=$(tr -cd '0-9' < "$ESTADO" 2>/dev/null)
+veces=0
+if [ -f "$ESTADO" ]; then
+    veces=$(tr -cd '0-9' < "$ESTADO" 2>/dev/null || echo 0)
+fi
 [ -n "$veces" ] || veces=0
 
 if [ "$veces" -ge 1 ]; then

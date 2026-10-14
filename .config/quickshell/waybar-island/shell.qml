@@ -575,7 +575,6 @@ ShellRoot {
         otaChangelogProc.running = true
         gpuStatusProc.running = true
         workspacesProc.running = true
-        langProc.running = true
     }
 
     IpcHandler {
