@@ -88,6 +88,7 @@ PanelWindow {
     property bool btPowered: true
     property string btType: "default"
     property string btDeviceName: ""
+    property int btBattery: -1
     readonly property string btIcon: {
         if (!btPowered) return "󰂲" // Off / Disabled
         if (btConnectedCount === 0) return "󰂯" // On, un-connected
@@ -378,16 +379,18 @@ print(f\"{bars}|{overall_pct}\")
             is_hp=0
             if echo \"$sink_name\" | grep -iqE 'headphone|headset|buds|wh-|airpod|ear'; then is_hp=1; fi
 
-            # 8. Bluetooth (Powered, Count, Device Type, Name)
+            # 8. Bluetooth (Powered, Count, Device Type, Name, Battery)
             bt_pow=$(bluetoothctl show 2>/dev/null | grep -q \"Powered: yes\" && echo 1 || echo 0)
             bt_cnt=$(bluetoothctl devices Connected 2>/dev/null | wc -l)
             bt_typ=\"default\"
             bt_name=\"\"
+            bt_bat=\"\"
             if [ \"$bt_cnt\" -gt 0 ]; then
                 first_mac=$(bluetoothctl devices Connected 2>/dev/null | head -n1 | awk '{print $2}')
                 if [ -n \"$first_mac\" ]; then
                     bt_name=$(bluetoothctl devices Connected 2>/dev/null | head -n1 | cut -d' ' -f3-)
-                    dev_icon=$(bluetoothctl info \"$first_mac\" 2>/dev/null | grep \"Icon:\" | awk '{print $2}')
+                    info_out=$(bluetoothctl info \"$first_mac\" 2>/dev/null)
+                    dev_icon=$(echo \"$info_out\" | grep \"Icon:\" | awk '{print $2}')
                     case \"$dev_icon\" in
                         *headphone*|*headset*|*audio*) bt_typ=\"audio\" ;;
                         *gamepad*|*joystick*) bt_typ=\"gamepad\" ;;
@@ -396,6 +399,15 @@ print(f\"{bars}|{overall_pct}\")
                         *phone*) bt_typ=\"phone\" ;;
                         *) bt_typ=\"default\" ;;
                     esac
+                    bat_raw=$(echo \"$info_out\" | grep -i \"Battery Percentage:\" | head -n1)
+                    if [ -n \"$bat_raw\" ]; then
+                        bt_bat=$(echo \"$bat_raw\" | grep -o '([0-9]\\+)' | tr -d '()')
+                        [ -z \"$bt_bat\" ] && bt_bat=$(echo \"$bat_raw\" | grep -o '[0-9]\\+' | tail -n1)
+                    fi
+                    if [ -z \"$bt_bat\" ]; then
+                        mac_under=$(echo \"$first_mac\" | tr ':' '_')
+                        bt_bat=$(upower -e 2>/dev/null | grep -i \"$mac_under\" | head -n1 | xargs -r upower -i 2>/dev/null | grep -i \"percentage:\" | awk '{print $2}' | tr -d '%')
+                    fi
                 fi
             fi
 
@@ -411,7 +423,7 @@ print(f\"{bars}|{overall_pct}\")
             wifi_ssid=$(echo \"$wifi_line\" | cut -d: -f3)
             [ -z \"$wifi_sig\" ] && wifi_sig=0
 
-            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_cnt|$bt_pow|$bt_typ|$bt_name|$is_eth|$is_wifi|$wifi_en|$wifi_sig|$wifi_ssid|$has_b|$bat_count|$bat_caps\"
+            echo \"$cpu_info|$ram_used|$cpu_temp|$gpu_temp|$bat_cap|$bat_status|$bri_pct|$vol_val|$is_muted|$is_hp|$bt_cnt|$bt_pow|$bt_typ|$bt_name|$is_eth|$is_wifi|$wifi_en|$wifi_sig|$wifi_ssid|$has_b|$bat_count|$bat_caps|$bt_bat\"
         "]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -461,6 +473,7 @@ print(f\"{bars}|{overall_pct}\")
                         barWin.btPowered = (p[12] === "1")
                         barWin.btType = p[13] || "default"
                         barWin.btDeviceName = p[14] || ""
+                        barWin.btBattery = (p.length >= 24 && p[23] !== "") ? (parseInt(p[23]) || -1) : -1
 
                         // Network
                         barWin.isEthernet = (p[15] === "1")
@@ -864,10 +877,15 @@ print(f\"{bars}|{overall_pct}\")
                             }
                             Text {
                                 visible: barWin.btConnectedCount > 0
-                                text: barWin.btConnectedCount.toString()
+                                text: {
+                                    if (barWin.btBattery >= 0) {
+                                        return (barWin.btConnectedCount > 1 ? (barWin.btBattery + "% (" + barWin.btConnectedCount + ")") : (barWin.btBattery + "%"))
+                                    }
+                                    return barWin.btConnectedCount.toString()
+                                }
                                 color: barWin.colCava
                                 font.family: "JetBrainsMono Nerd Font"
-                                font.pixelSize: 13
+                                font.pixelSize: 12
                                 font.weight: Font.DemiBold
                             }
                         }

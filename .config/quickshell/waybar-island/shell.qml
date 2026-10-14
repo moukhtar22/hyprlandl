@@ -3719,7 +3719,19 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: root.pairRequest.active ? root.t("mod_bt_pairing", "Pairing request pending") : (root.btEnabled ? (root.btDevices.filter(d => d.connected).length > 0 ? root.btDevices.filter(d => d.connected)[0].name : root.t("mod_bt_enabled", "Enabled")) : root.t("mod_bt_disabled", "Disabled"))
+                                                    text: {
+                                                        if (root.pairRequest.active) return root.t("mod_bt_pairing", "Pairing request pending")
+                                                        if (!root.btEnabled) return root.t("mod_bt_disabled", "Disabled")
+                                                        const conn = (root.btDevices || []).filter(d => d.connected)
+                                                        if (conn.length > 0) {
+                                                            const d0 = conn[0]
+                                                            if (d0.battery !== undefined && d0.battery !== null && Number(d0.battery) >= 0) {
+                                                                return d0.name + " (" + d0.battery + "%)"
+                                                            }
+                                                            return d0.name
+                                                        }
+                                                        return root.t("mod_bt_enabled", "Enabled")
+                                                    }
                                                     color: root.btEnabled ? Qt.rgba(root.colBg.r, root.colBg.g, root.colBg.b, 0.8) : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
@@ -5635,10 +5647,72 @@ ShellRoot {
                                                     Layout.fillWidth: true
                                                 }
                                                 Text {
-                                                    text: modelData.mac + (modelData.connected ? ("  •  " + root.t("bt_connected", "Connected")) : (modelData.paired ? ("  •  " + root.t("bt_paired", "Paired")) : (modelData.rssi ? "  •  " + modelData.rssi + " dBm" : ("  •  " + root.t("bt_available", "Available")))))
+                                                    text: {
+                                                        let extra = ""
+                                                        if (modelData.connected && modelData.battery !== undefined && modelData.battery !== null && Number(modelData.battery) >= 0) {
+                                                            extra = " (" + modelData.battery + "%)"
+                                                        }
+                                                        return modelData.mac + (modelData.connected ? ("  •  " + root.t("bt_connected", "Connected") + extra) : (modelData.paired ? ("  •  " + root.t("bt_paired", "Paired")) : (modelData.rssi ? "  •  " + modelData.rssi + " dBm" : ("  •  " + root.t("bt_available", "Available")))))
+                                                    }
                                                     color: modelData.connected ? root.colAccent : root.colMuted
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 9
+                                                }
+                                            }
+
+                                            // Peripheral Battery Chip
+                                            Rectangle {
+                                                visible: modelData.connected && modelData.battery !== undefined && modelData.battery !== null && Number(modelData.battery) >= 0
+                                                height: 22
+                                                radius: 7
+                                                color: {
+                                                    const b = Number(modelData.battery)
+                                                    if (b <= 20) return Qt.rgba(1.0, 0.33, 0.33, 0.18)
+                                                    if (b <= 50) return Qt.rgba(1.0, 0.72, 0.42, 0.18)
+                                                    return Qt.rgba(0.31, 0.98, 0.48, 0.15)
+                                                }
+                                                border.color: {
+                                                    const b = Number(modelData.battery)
+                                                    if (b <= 20) return "#ff5555"
+                                                    if (b <= 50) return "#ffb86c"
+                                                    return "#50fa7b"
+                                                }
+                                                border.width: 1
+                                                implicitWidth: btBatRow.implicitWidth + 12
+
+                                                RowLayout {
+                                                    id: btBatRow
+                                                    anchors.centerIn: parent
+                                                    spacing: 4
+                                                    Text {
+                                                        text: {
+                                                            const b = Number(modelData.battery)
+                                                            if (b > 90) return "󰁹"
+                                                            if (b > 80) return "󰂂"
+                                                            if (b > 70) return "󰂁"
+                                                            if (b > 60) return "󰂀"
+                                                            if (b > 50) return "󰁾"
+                                                            if (b > 40) return "󰁽"
+                                                            if (b > 30) return "󰁼"
+                                                            if (b > 20) return "󰁻"
+                                                            return "󰁺"
+                                                        }
+                                                        color: {
+                                                            const b = Number(modelData.battery)
+                                                            if (b <= 20) return "#ff5555"
+                                                            if (b <= 50) return "#ffb86c"
+                                                            return "#50fa7b"
+                                                        }
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 11
+                                                    }
+                                                    Text {
+                                                        text: modelData.battery + "%"
+                                                        color: root.colFg
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 10
+                                                        font.weight: Font.Bold
+                                                    }
                                                 }
                                             }
 

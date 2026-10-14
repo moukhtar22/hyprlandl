@@ -136,6 +136,7 @@ def get_bt_status():
             alias = None
             icon = 'other'
             rssi = None
+            battery = None
 
             for il in info.split('\n'):
                 il = il.strip()
@@ -145,12 +146,45 @@ def get_bt_status():
                     alias = il.split(':', 1)[1].strip()
                 elif il.startswith('Icon:'):
                     icon = il.split(':', 1)[1].strip()
+                elif il.startswith('Battery Percentage:'):
+                    try:
+                        val = il.split(':', 1)[1].strip()
+                        m = re.search(r'\((\d+)\)', val)
+                        if m:
+                            battery = int(m.group(1))
+                        else:
+                            m = re.search(r'(\d+)', val)
+                            if m:
+                                battery = int(m.group(1))
+                    except Exception:
+                        pass
                 elif il.startswith('RSSI:'):
                     try:
                         rssi_val = il.split('(', 1)[1].replace(')', '').strip()
                         rssi = int(rssi_val)
                     except Exception:
                         pass
+
+            # Fallback to upower for battery if bluetoothctl did not report it
+            if battery is None and d['connected']:
+                try:
+                    mac_under = mac.replace(':', '_')
+                    up_devs = subprocess.check_output(['upower', '-e'], text=True, stderr=subprocess.DEVNULL, timeout=1)
+                    matched_dev = None
+                    for line in up_devs.splitlines():
+                        if mac_under.lower() in line.lower():
+                            matched_dev = line.strip()
+                            break
+                    if matched_dev:
+                        info_up = subprocess.check_output(['upower', '-i', matched_dev], text=True, stderr=subprocess.DEVNULL, timeout=1)
+                        for uline in info_up.splitlines():
+                            if 'percentage:' in uline:
+                                m = re.search(r'(\d+)%', uline)
+                                if m:
+                                    battery = int(m.group(1))
+                                    break
+                except Exception:
+                    pass
 
             # Detect if name is a real human name or just MAC
             best_name = real_name or alias or d['name'] or ''
@@ -166,6 +200,7 @@ def get_bt_status():
 
             d['icon'] = icon
             d['rssi'] = rssi
+            d['battery'] = battery
             clean_devs.append(d)
 
         # Sort: Connected first, then Paired, then Named devices, then signal strength, then name
