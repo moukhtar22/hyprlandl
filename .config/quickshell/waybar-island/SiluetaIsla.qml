@@ -25,7 +25,7 @@ Shape {
 
     antialiasing: true
     layer.enabled: true
-    layer.samples: 8
+    layer.samples: 4
     layer.smooth: true
 
     ShapePath {

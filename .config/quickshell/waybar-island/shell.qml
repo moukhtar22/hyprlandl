@@ -552,6 +552,9 @@ ShellRoot {
     readonly property var unnamedBtDevices: (root.btDevices || []).filter(d => !d.has_name && !d.paired && !d.connected)
 
     function refreshAllStates() {
+        // En dispositivos con menor rendimiento (como laptops ThinkPad T480 con CPUs ULV),
+        // lanzar 23 subprocesos bash a la vez provoca saturación de CPU y tirones (jank) al abrir.
+        // Solo refrescamos inmediatamente lo que se ve en la pantalla principal de Control.
         volProc.running = true
         briProc.running = true
         wifiProc.running = true
@@ -560,21 +563,14 @@ ShellRoot {
         battProc.running = true
         kbProc.running = true
         muteProc.running = true
-        audioSinksProc.running = true
-        audioAppsProc.running = true
         recStatusProc.running = true
         sysStatsProc.running = true
-        nightLightCheckProc.running = true
-        caffeineCheckProc.running = true
-        powerSaveCheckProc.running = true
-        dndCheckProc.running = true
-        clipCountProc.running = true
-        hyprStatusProc.running = true
-        clipListProc.running = true
-        otaStatusProc.running = true
-        otaChangelogProc.running = true
         gpuStatusProc.running = true
-        workspacesProc.running = true
+        clipCountProc.running = true
+
+        // Los procesos pesados o de otras pestañas (como clipListProc que parsea miniaturas de cliphist,
+        // otaStatusProc / otaChangelogProc que comprueban repos de git, hyprStatusProc, workspacesProc)
+        // se ejecutan bajo demanda al entrar en sus pestañas o subvistas específicas.
     }
 
     IpcHandler {
