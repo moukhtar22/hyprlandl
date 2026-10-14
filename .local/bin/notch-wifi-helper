@@ -116,6 +116,62 @@ def main():
                 print(json.dumps({'status': 'error', 'message': res.stderr.strip() or res.stdout.strip()}))
         except Exception as e:
             print(json.dumps({'status': 'error', 'message': str(e)}))
+    elif cmd == 'check-portal':
+        status = "unknown"
+        try:
+            res = subprocess.check_output(['nmcli', 'networking', 'connectivity', 'check'], text=True, timeout=3).strip()
+            status = res
+        except Exception:
+            pass
+
+        portal_url = None
+        is_captive = False
+
+        if status in ['portal', 'limited', 'unknown']:
+            import urllib.request
+            endpoints = [
+                "http://connectivitycheck.gstatic.com/generate_204",
+                "http://detectportal.firefox.com/canonical.html",
+                "http://clients3.google.com/generate_204"
+            ]
+
+            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    nonlocal portal_url
+                    portal_url = newurl
+                    return None
+
+            opener = urllib.request.build_opener(NoRedirectHandler)
+            for ep in endpoints:
+                try:
+                    req = urllib.request.Request(ep, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'})
+                    resp = opener.open(req, timeout=3)
+                    if resp.getcode() not in [200, 204]:
+                        is_captive = True
+                        break
+                except urllib.error.HTTPError as e:
+                    if e.code in [301, 302, 307, 308]:
+                        is_captive = True
+                        portal_url = e.headers.get('Location', portal_url)
+                        break
+                except Exception:
+                    pass
+
+        if status == 'portal':
+            is_captive = True
+
+        print(json.dumps({
+            'status': status,
+            'is_captive': is_captive,
+            'portal_url': portal_url or "http://connectivitycheck.gstatic.com/generate_204"
+        }))
+    elif cmd == 'open-portal':
+        target_url = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else "http://connectivitycheck.gstatic.com/generate_204"
+        try:
+            subprocess.Popen(['xdg-open', target_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(json.dumps({'status': 'ok', 'url': target_url}))
+        except Exception as e:
+            print(json.dumps({'status': 'error', 'message': str(e)}))
     elif cmd == 'disconnect':
         try:
             # Find active wifi interface

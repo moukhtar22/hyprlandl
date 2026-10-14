@@ -441,6 +441,8 @@ ShellRoot {
     property bool isMuted: false
 
     property var wifiList: []
+    property bool wifiPortalDetected: false
+    property string wifiPortalUrl: "http://connectivitycheck.gstatic.com/generate_204"
     property string wifiConnectScreen: ""
     property string wifiConnectSsid: ""
     property string wifiConnectPassword: ""
@@ -647,7 +649,15 @@ ShellRoot {
             if (!panel) return "unavailable"
             root.wifiScanning = true
             wifiListProc.running = true
+            wifiPortalProc.running = true
             return "wifi"
+        }
+        function testPortal(enabled: string): string {
+            root.wifiPortalDetected = (enabled === "true" || enabled === "1" || enabled === "on")
+            if (root.wifiPortalDetected) {
+                root.wifiPortalUrl = "https://wifi-portal.example.com/login"
+            }
+            return root.wifiPortalDetected ? "portal_simulated" : "portal_disabled"
         }
         function openBluetooth(screenName: string): string {
             let panel = root.setPanelState(screenName, true, 0, 2)
@@ -697,7 +707,9 @@ ShellRoot {
                 sub: p.controlSubView,
                 hidden: root.hiddenScreens[screenName] === true,
                 fullscreen: root.fullscreenScreens[screenName] === true,
-                visible: p.visible
+                visible: p.visible,
+                portal: root.wifiPortalDetected,
+                portalUrl: root.wifiPortalUrl
             })
         }
         function openBatteries(screenName: string): string {
@@ -1129,6 +1141,7 @@ ShellRoot {
             root.wifiConnectPromptOnError = false
             wifiListProc.running = true
             wifiProc.running = true
+            wifiPortalProc.running = true
         }
     }
 
@@ -1145,6 +1158,33 @@ ShellRoot {
                 }
             }
         }
+    }
+
+    // Captive Portal Detection (for public networks like hotels, airports, cafes)
+    Process {
+        id: wifiPortalProc
+        command: ["bash", "-c", "$HOME/.local/bin/notch-wifi-helper check-portal"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const res = JSON.parse(text.trim())
+                    root.wifiPortalDetected = (res && res.is_captive === true)
+                    if (res && res.portal_url) {
+                        root.wifiPortalUrl = res.portal_url
+                    }
+                } catch(e) {
+                    root.wifiPortalDetected = false
+                }
+            }
+        }
+    }
+
+    Timer {
+        id: wifiPortalCheckTimer
+        interval: 10000
+        running: root.wifiEnabled
+        repeat: true
+        onTriggered: wifiPortalProc.running = true
     }
 
     Process {
@@ -1688,7 +1728,10 @@ ShellRoot {
                 }
             }
             onControlSubViewChanged: {
-                if (islandWin.controlSubView === 1) wifiListProc.running = true
+                if (islandWin.controlSubView === 1) {
+                    wifiListProc.running = true
+                    wifiPortalProc.running = true
+                }
                 if (islandWin.controlSubView === 2) {
                     btStatusProc.running = true
                     if (root.btEnabled) root.runCmd("$HOME/.local/bin/notch-bt-helper scan")
@@ -4898,6 +4941,76 @@ ShellRoot {
                                                     wifiListProc.running = true
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Captive Portal Login Prompt Card (Public Wi-Fi networks requiring web authentication)
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 38
+                            radius: 10
+                            visible: root.wifiPortalDetected && root.wifiEnabled
+                            color: Qt.rgba(255/255, 167/255, 38/255, 0.20)
+                            border.color: "#FFA726"
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 10
+                                spacing: 10
+
+                                Text {
+                                    text: "󰖟"
+                                    color: "#FFA726"
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: 16
+                                }
+
+                                ColumnLayout {
+                                    spacing: 0
+                                    Layout.fillWidth: true
+
+                                    Text {
+                                        text: root.t("wifi_portal_required", "Login Required (Public Wi-Fi)")
+                                        color: "#FFE082"
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+
+                                    Text {
+                                        text: root.t("wifi_portal_desc", "Open browser to accept terms or sign in")
+                                        color: root.colMuted
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 9
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 24
+                                    Layout.preferredWidth: 84
+                                    radius: 6
+                                    color: "#FFA726"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.t("wifi_portal_open", "Open Login")
+                                        color: "#1a1a1a"
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 10
+                                        font.weight: Font.Bold
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.runCmd("$HOME/.local/bin/notch-wifi-helper open-portal '" + (root.wifiPortalUrl || "") + "'")
                                         }
                                     }
                                 }
