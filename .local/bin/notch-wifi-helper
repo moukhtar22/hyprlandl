@@ -30,6 +30,10 @@ def get_saved_wifi_profiles():
     return profiles
 
 
+def is_enterprise_security(sec):
+    s = (sec or '').upper()
+    return any(k in s for k in ['802.1X', 'ENTERPRISE', 'EAP'])
+
 def get_wifi_list(rescan=False):
     saved_profiles = get_saved_wifi_profiles()
     try:
@@ -66,13 +70,58 @@ def get_wifi_list(rescan=False):
                 'security': sec,
                 'bars': bars,
                 'signal': signal,
-                'saved': ssid in saved_profiles
+                'saved': ssid in saved_profiles,
+                'is_enterprise': is_enterprise_security(sec)
             })
         # Sort connected first, then by signal descending
         networks.sort(key=lambda x: (not x['connected'], -x['signal']))
         return networks
     except Exception as e:
         return []
+
+def connect_enterprise(ssid, identity, password, anon_identity=None):
+    try:
+        saved_uuid = get_saved_wifi_profiles().get(ssid)
+        if saved_uuid:
+            mod_args = [
+                'nmcli', 'connection', 'modify', saved_uuid,
+                'wifi-sec.key-mgmt', 'wpa-eap',
+                '802-1x.eap', 'peap',
+                '802-1x.phase2-auth', 'mschapv2',
+                '802-1x.identity', identity,
+                '802-1x.password', password
+            ]
+            if anon_identity:
+                mod_args.extend(['802-1x.anonymous-identity', anon_identity])
+            subprocess.run(mod_args, check=True, capture_output=True, text=True, timeout=10)
+            call_args = ['nmcli', 'connection', 'up', 'uuid', saved_uuid]
+        else:
+            add_args = [
+                'nmcli', 'connection', 'add',
+                'type', 'wifi',
+                'con-name', ssid,
+                'ssid', ssid,
+                'wifi-sec.key-mgmt', 'wpa-eap',
+                '802-1x.eap', 'peap',
+                '802-1x.phase2-auth', 'mschapv2',
+                '802-1x.identity', identity,
+                '802-1x.password', password
+            ]
+            if anon_identity:
+                add_args.extend(['802-1x.anonymous-identity', anon_identity])
+            subprocess.run(add_args, check=True, capture_output=True, text=True, timeout=10)
+            call_args = ['nmcli', 'connection', 'up', ssid]
+
+        res = subprocess.run(call_args, capture_output=True, text=True, timeout=25)
+        if res.returncode == 0:
+            print(json.dumps({'status': 'ok', 'message': res.stdout.strip()}))
+        else:
+            print(json.dumps({'status': 'error', 'message': res.stderr.strip() or res.stdout.strip()}))
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.strip() if e.stderr else str(e)
+        print(json.dumps({'status': 'error', 'message': err_msg}))
+    except Exception as e:
+        print(json.dumps({'status': 'error', 'message': str(e)}))
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'list'
@@ -98,6 +147,14 @@ def main():
             print(json.dumps({'status': 'error', 'message': 'Missing SSID'}))
             sys.exit(1)
         ssid = sys.argv[2]
+        if len(sys.argv) >= 5:
+            # Invoked as: connect <ssid> <identity> <password> [anonymous_identity]
+            identity = sys.argv[3]
+            password = sys.argv[4]
+            anon_identity = sys.argv[5] if len(sys.argv) > 5 else None
+            connect_enterprise(ssid, identity, password, anon_identity)
+            return
+
         password = sys.argv[3] if len(sys.argv) > 3 else None
         try:
             saved_uuid = get_saved_wifi_profiles().get(ssid)
@@ -116,6 +173,15 @@ def main():
                 print(json.dumps({'status': 'error', 'message': res.stderr.strip() or res.stdout.strip()}))
         except Exception as e:
             print(json.dumps({'status': 'error', 'message': str(e)}))
+    elif cmd == 'connect-enterprise':
+        if len(sys.argv) < 5:
+            print(json.dumps({'status': 'error', 'message': 'Missing SSID, identity, or password'}))
+            sys.exit(1)
+        ssid = sys.argv[2]
+        identity = sys.argv[3]
+        password = sys.argv[4]
+        anon_identity = sys.argv[5] if len(sys.argv) > 5 else None
+        connect_enterprise(ssid, identity, password, anon_identity)
     elif cmd == 'check-portal':
         status = "unknown"
         try:

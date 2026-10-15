@@ -203,6 +203,8 @@ Commands:
   toggle               Toggle Wi-Fi radio (notch-wifi-helper toggle)
   connect <SSID> [password]
                        Connect to a network
+  connect-enterprise <SSID> <username> <password> [anon-id]
+                       Connect to a WPA Enterprise (802.1X) network
   disconnect           Disconnect active Wi-Fi
   menu                 Open rofi Wi-Fi menu (rofi-wifi-menu)
 
@@ -425,6 +427,11 @@ group_wifi() {
             if [ $# -lt 1 ]; then err "usage: rhythm wifi connect <SSID> [password]"; return 1; fi
             local h; h="$(require notch-wifi-helper)" || return 1
             "$h" connect "$@"
+            ;;
+        connect-enterprise)
+            if [ $# -lt 3 ]; then err "usage: rhythm wifi connect-enterprise <SSID> <username> <password> [anonymous-identity]"; return 1; fi
+            local h; h="$(require notch-wifi-helper)" || return 1
+            "$h" connect-enterprise "$@"
             ;;
         menu)
             local h; h="$(require rofi-wifi-menu)" || return 1

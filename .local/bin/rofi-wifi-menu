@@ -214,6 +214,17 @@ else
     if [ "$SEC_TYPE" = "Abierta" ] || [ -z "$SEC_TYPE" ] || [ "$SEC_TYPE" = "--" ]; then
         notify "Conectando a red abierta: $SELECTED_SSID..."
         nmcli dev wifi connect "$SELECTED_SSID"
+    elif [[ "$SEC_TYPE" =~ (802\.1X|Enterprise|EAP) ]]; then
+        WIFI_USER=$(rofi-themed -dmenu -p "Usuario / Identity ($SELECTED_SSID)" -theme "$THEME_FILE" -m "$ACTIVE_MON")
+        [ -z "$WIFI_USER" ] && exit 0
+        WIFI_PASSWORD=$(rofi-themed -dmenu -password -p "Contraseña ($SELECTED_SSID)" -theme "$THEME_FILE" -m "$ACTIVE_MON")
+        [ -z "$WIFI_PASSWORD" ] && exit 0
+        notify "Conectando a red WPA Enterprise: $SELECTED_SSID..."
+        if "$HOME/.local/bin/notch-wifi-helper" connect-enterprise "$SELECTED_SSID" "$WIFI_USER" "$WIFI_PASSWORD"; then
+            notify "Conectado exitosamente a $SELECTED_SSID"
+        else
+            notify "Error de autenticación al conectar a $SELECTED_SSID"
+        fi
     else
         WIFI_PASSWORD=$(rofi-themed -dmenu -password -p "Contraseña ($SELECTED_SSID)" -theme "$THEME_FILE" -m "$ACTIVE_MON")
         [ -z "$WIFI_PASSWORD" ] && exit 0

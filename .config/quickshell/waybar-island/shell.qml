@@ -446,10 +446,12 @@ ShellRoot {
     property string wifiConnectScreen: ""
     property string wifiConnectSsid: ""
     property string wifiConnectPassword: ""
+    property string wifiConnectIdentity: ""
+    property bool wifiConnectIsEnterprise: false
     property bool wifiConnectRunning: false
     property bool wifiConnectPromptOnError: false
 
-    function startWifiConnect(screenName, ssid, password, promptOnError) {
+    function startWifiConnect(screenName, ssid, password, promptOnError, isEnterprise, identity) {
         let panel = root.panelForScreen(screenName)
         if (!panel) return
         if (root.wifiConnectRunning) {
@@ -460,10 +462,13 @@ ShellRoot {
         root.wifiConnectScreen = screenName
         root.wifiConnectSsid = ssid
         root.wifiConnectPassword = password || ""
+        root.wifiConnectIdentity = identity || ""
+        root.wifiConnectIsEnterprise = isEnterprise === true
         root.wifiConnectPromptOnError = promptOnError === true
         if (root.wifiConnectPromptOnError) {
             panel.clearWifiPassword()
             panel.selectedWifiSsid = ""
+            panel.selectedWifiIsEnterprise = false
         }
         panel.wifiConnectState = "connecting"
         panel.wifiConnectMessage = "Connecting to " + ssid + "…"
@@ -1114,8 +1119,11 @@ ShellRoot {
 
     Process {
         id: wifiConnectProc
-        command: [Quickshell.env("HOME") + "/.local/bin/notch-wifi-helper",
-                  "connect", root.wifiConnectSsid, root.wifiConnectPassword]
+        command: root.wifiConnectIsEnterprise
+            ? [Quickshell.env("HOME") + "/.local/bin/notch-wifi-helper",
+               "connect-enterprise", root.wifiConnectSsid, root.wifiConnectIdentity, root.wifiConnectPassword]
+            : [Quickshell.env("HOME") + "/.local/bin/notch-wifi-helper",
+               "connect", root.wifiConnectSsid, root.wifiConnectPassword]
         stdout: StdioCollector {
             onStreamFinished: {
                 let result = null
@@ -1125,12 +1133,16 @@ ShellRoot {
                     if (result && result.status === "ok") {
                         panel.finishWifiConnection(root.wifiConnectSsid)
                     } else {
-                        if (root.wifiConnectPromptOnError)
+                        if (root.wifiConnectPromptOnError) {
                             panel.selectedWifiSsid = root.wifiConnectSsid
+                            panel.selectedWifiIsEnterprise = root.wifiConnectIsEnterprise
+                        }
                         panel.wifiConnectState = "error"
                         panel.wifiConnectMessage = result && result.message
                             ? "Connection failed: " + result.message
-                            : "Connection failed. Check the password and try again."
+                            : (root.wifiConnectIsEnterprise
+                                ? "Connection failed. Check your username/identity and password."
+                                : "Connection failed. Check the password and try again.")
                     }
                 }
             }
@@ -1138,6 +1150,8 @@ ShellRoot {
         onExited: {
             root.wifiConnectRunning = false
             root.wifiConnectPassword = ""
+            root.wifiConnectIdentity = ""
+            root.wifiConnectIsEnterprise = false
             root.wifiConnectPromptOnError = false
             wifiListProc.running = true
             wifiProc.running = true
@@ -1674,6 +1688,7 @@ ShellRoot {
             property int controlSubView: 0
             property real tabFade: 1.0
             property string selectedWifiSsid: ""
+            property bool selectedWifiIsEnterprise: false
             property string wifiConnectState: "idle"
             property string wifiConnectMessage: ""
             property bool wifiPasswordVisible: false
@@ -1683,6 +1698,7 @@ ShellRoot {
             function finishWifiConnection(ssid) {
                 clearWifiPassword()
                 selectedWifiSsid = ""
+                selectedWifiIsEnterprise = false
                 wifiConnectState = "connected"
                 wifiConnectMessage = "Connected to " + ssid + "."
                 wifiConnectStatusTimer.restart()
@@ -1690,6 +1706,7 @@ ShellRoot {
             function clearWifiPassword() {
                 wifiPasswordVisible = false
                 wifiPassInput.text = ""
+                if (typeof wifiUserInput !== "undefined" && wifiUserInput) wifiUserInput.text = ""
             }
             Behavior on tabFade { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
 
@@ -5050,10 +5067,12 @@ ShellRoot {
                             }
                         }
 
-                        // Inline Wi-Fi password card; errors stay here for retry.
+                        // Inline Wi-Fi password / WPA Enterprise card; errors stay here for retry.
                         Rectangle {
                             Layout.fillWidth: true
-                            height: islandWin.wifiConnectState === "idle" ? 48 : 96
+                            height: islandWin.selectedWifiIsEnterprise
+                                ? (islandWin.wifiConnectState === "idle" ? 118 : 152)
+                                : (islandWin.wifiConnectState === "idle" ? 48 : 96)
                             radius: 12
                             color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.15)
                             border.color: islandWin.wifiConnectState === "error" ? "#ef5350" : root.colAccent
@@ -5065,11 +5084,122 @@ ShellRoot {
                                 anchors.margins: 8
                                 spacing: 4
 
+                                // WPA Enterprise Header (shows SSID, 802.1X tag and close button)
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    visible: islandWin.selectedWifiIsEnterprise
+
+                                    Text {
+                                        text: "󰌾 " + islandWin.selectedWifiSsid
+                                        color: root.colFg
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        height: 18
+                                        radius: 4
+                                        color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25)
+                                        border.color: root.colAccent
+                                        border.width: 1
+                                        Layout.preferredWidth: entBadge.implicitWidth + 8
+                                        Text {
+                                            id: entBadge
+                                            anchors.centerIn: parent
+                                            text: "WPA Enterprise (802.1X)"
+                                            color: root.colAccent
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 8
+                                            font.weight: Font.Bold
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 22; height: 22; radius: 6
+                                        color: root.colSurface
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "󰅖"
+                                            color: root.colFg
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 11
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                islandWin.selectedWifiSsid = ""
+                                                islandWin.selectedWifiIsEnterprise = false
+                                                islandWin.wifiConnectState = "idle"
+                                                islandWin.wifiConnectMessage = ""
+                                                islandWin.clearWifiPassword()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // WPA Enterprise Username / Identity row
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 7
+                                    visible: islandWin.selectedWifiIsEnterprise
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 28
+                                        radius: 8
+                                        color: root.colBg
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            spacing: 6
+                                            Text {
+                                                text: "󰞌"
+                                                color: root.colAccent
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                            Item {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: root.t("wifi_user_placeholder", "Username / Identity (e.g. user@domain.edu)")
+                                                    color: root.colMuted
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    visible: !wifiUserInput.text && !wifiUserInput.activeFocus
+                                                    elide: Text.ElideRight
+                                                }
+                                                TextInput {
+                                                    id: wifiUserInput
+                                                    anchors.fill: parent
+                                                    color: root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 11
+                                                    enabled: islandWin.wifiConnectState !== "connecting" && islandWin.wifiConnectState !== "connected"
+                                                    selectByMouse: true
+                                                    clip: true
+                                                    onAccepted: wifiPassInput.forceActiveFocus()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Password input row
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 7
 
                                     Text {
+                                        visible: !islandWin.selectedWifiIsEnterprise
                                         text: "󰌾 " + islandWin.selectedWifiSsid
                                         color: root.colFg
                                         font.family: "JetBrainsMono Nerd Font"
@@ -5081,26 +5211,51 @@ ShellRoot {
 
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: 30
+                                        height: 28
                                         radius: 8
                                         color: root.colBg
-                                        TextInput {
-                                            id: wifiPassInput
+                                        RowLayout {
                                             anchors.fill: parent
-                                            anchors.margins: 6
-                                            color: root.colFg
-                                            font.family: "JetBrainsMono Nerd Font"
-                                            font.pixelSize: 11
-                                            echoMode: islandWin.wifiPasswordVisible ? TextInput.Normal : TextInput.Password
-                                            enabled: islandWin.wifiConnectState !== "connecting" && islandWin.wifiConnectState !== "connected"
-                                            selectByMouse: true
-                                            clip: true
-                                            onAccepted: connectBtnArea.clicked(null)
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            spacing: 6
+                                            Text {
+                                                visible: islandWin.selectedWifiIsEnterprise
+                                                text: "󰌾"
+                                                color: root.colAccent
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                            Item {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: root.t("wifi_pass_placeholder", "Password")
+                                                    color: root.colMuted
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 10
+                                                    visible: islandWin.selectedWifiIsEnterprise && !wifiPassInput.text && !wifiPassInput.activeFocus
+                                                }
+                                                TextInput {
+                                                    id: wifiPassInput
+                                                    anchors.fill: parent
+                                                    color: root.colFg
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 11
+                                                    echoMode: islandWin.wifiPasswordVisible ? TextInput.Normal : TextInput.Password
+                                                    enabled: islandWin.wifiConnectState !== "connecting" && islandWin.wifiConnectState !== "connected"
+                                                    selectByMouse: true
+                                                    clip: true
+                                                    onAccepted: connectBtnArea.clicked(null)
+                                                }
+                                            }
                                         }
                                     }
 
                                     Rectangle {
-                                        width: 42; height: 30; radius: 8
+                                        width: 42; height: 28; radius: 8
                                         color: root.colSurface
                                         Text {
                                             anchors.centerIn: parent
@@ -5118,7 +5273,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
-                                        width: 76; height: 30; radius: 8
+                                        width: 76; height: 28; radius: 8
                                         color: islandWin.wifiConnectState === "connected" ? "#4caf50" : root.colAccent
                                         opacity: islandWin.wifiConnectState === "connecting" ? 0.65 : 1
                                         Text {
@@ -5137,19 +5292,36 @@ ShellRoot {
                                             enabled: islandWin.wifiConnectState !== "connecting" && islandWin.wifiConnectState !== "connected"
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
-                                                const pass = wifiPassInput.text
-                                                if (pass.length === 0) {
-                                                    islandWin.wifiConnectState = "error"
-                                                    islandWin.wifiConnectMessage = "Enter the Wi-Fi password. Use Show to check it before connecting."
-                                                    return
+                                                if (islandWin.selectedWifiIsEnterprise) {
+                                                    const user = wifiUserInput.text.trim()
+                                                    const pass = wifiPassInput.text
+                                                    if (user.length === 0) {
+                                                        islandWin.wifiConnectState = "error"
+                                                        islandWin.wifiConnectMessage = root.t("wifi_err_user", "Enter your username/identity for WPA Enterprise.")
+                                                        return
+                                                    }
+                                                    if (pass.length === 0) {
+                                                        islandWin.wifiConnectState = "error"
+                                                        islandWin.wifiConnectMessage = root.t("wifi_err_pass", "Enter your password.")
+                                                        return
+                                                    }
+                                                    root.startWifiConnect(islandWin.modelData.name, islandWin.selectedWifiSsid, pass, false, true, user)
+                                                } else {
+                                                    const pass = wifiPassInput.text
+                                                    if (pass.length === 0) {
+                                                        islandWin.wifiConnectState = "error"
+                                                        islandWin.wifiConnectMessage = "Enter the Wi-Fi password. Use Show to check it before connecting."
+                                                        return
+                                                    }
+                                                    root.startWifiConnect(islandWin.modelData.name, islandWin.selectedWifiSsid, pass, false, false, "")
                                                 }
-                                                root.startWifiConnect(islandWin.modelData.name, islandWin.selectedWifiSsid, pass, false)
                                             }
                                         }
                                     }
 
                                     Rectangle {
-                                        width: 28; height: 30; radius: 8
+                                        visible: !islandWin.selectedWifiIsEnterprise
+                                        width: 28; height: 28; radius: 8
                                         color: root.colSurface
                                         Text {
                                             anchors.centerIn: parent
@@ -5163,10 +5335,10 @@ ShellRoot {
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 islandWin.selectedWifiSsid = ""
+                                                islandWin.selectedWifiIsEnterprise = false
                                                 islandWin.wifiConnectState = "idle"
                                                 islandWin.wifiConnectMessage = ""
-                                                islandWin.wifiPasswordVisible = false
-                                                wifiPassInput.text = ""
+                                                islandWin.clearWifiPassword()
                                             }
                                         }
                                     }
@@ -5190,7 +5362,7 @@ ShellRoot {
                         // Available Networks List
                         Flickable {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: islandWin.selectedWifiSsid !== "" ? 300 : 355
+                            Layout.preferredHeight: islandWin.selectedWifiSsid !== "" ? (islandWin.selectedWifiIsEnterprise ? 245 : 300) : 355
                             contentWidth: width
                             contentHeight: wifiNetColumn.implicitHeight
                             clip: true
@@ -5225,14 +5397,35 @@ ShellRoot {
                                             ColumnLayout {
                                                 spacing: 0
                                                 Layout.fillWidth: true
-                                                Text {
-                                                    text: modelData.ssid
-                                                    color: root.colFg
-                                                    font.family: "JetBrainsMono Nerd Font"
-                                                    font.pixelSize: 11
-                                                    font.weight: modelData.connected ? Font.Bold : Font.Normal
-                                                    elide: Text.ElideRight
+                                                RowLayout {
+                                                    spacing: 6
                                                     Layout.fillWidth: true
+                                                    Text {
+                                                        text: modelData.ssid
+                                                        color: root.colFg
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 11
+                                                        font.weight: modelData.connected ? Font.Bold : Font.Normal
+                                                        elide: Text.ElideRight
+                                                    }
+                                                    Rectangle {
+                                                        visible: modelData.is_enterprise === true
+                                                        height: 14
+                                                        radius: 4
+                                                        color: Qt.rgba(root.colAccent.r, root.colAccent.g, root.colAccent.b, 0.25)
+                                                        border.color: root.colAccent
+                                                        border.width: 1
+                                                        Layout.preferredWidth: entTag.implicitWidth + 8
+                                                        Text {
+                                                            id: entTag
+                                                            anchors.centerIn: parent
+                                                            text: "802.1X"
+                                                            color: root.colAccent
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 8
+                                                            font.weight: Font.Bold
+                                                        }
+                                                    }
                                                 }
                                                 Text {
                                                     text: (modelData.saved ? (root.t("wifi_saved", "Saved") + "  •  ") : "") + modelData.signal + "%  •  " + modelData.security
@@ -5266,19 +5459,25 @@ ShellRoot {
                                                             if (modelData.saved) {
                                                                 // Reuse NetworkManager's saved credentials; only show the password
                                                                 // form if bringing the saved profile up fails.
-                                                                root.startWifiConnect(islandWin.modelData.name, modelData.ssid, "", true)
+                                                                root.startWifiConnect(islandWin.modelData.name, modelData.ssid, "", true, modelData.is_enterprise === true, "")
                                                             } else if (modelData.security === "Open" || modelData.security === "Abierta" || modelData.security === "--") {
                                                                 islandWin.selectedWifiSsid = ""
+                                                                islandWin.selectedWifiIsEnterprise = false
                                                                 islandWin.wifiConnectState = "idle"
                                                                 islandWin.wifiConnectMessage = ""
-                                                                root.startWifiConnect(islandWin.modelData.name, modelData.ssid, "", false)
+                                                                root.startWifiConnect(islandWin.modelData.name, modelData.ssid, "", false, false, "")
                                                             } else {
                                                                 islandWin.selectedWifiSsid = modelData.ssid
+                                                                islandWin.selectedWifiIsEnterprise = modelData.is_enterprise === true ||
+                                                                    (modelData.security && (modelData.security.indexOf("802.1X") !== -1 || modelData.security.indexOf("Enterprise") !== -1 || modelData.security.indexOf("EAP") !== -1))
                                                                 islandWin.wifiConnectState = "idle"
                                                                 islandWin.wifiConnectMessage = ""
-                                                                islandWin.wifiPasswordVisible = false
-                                                                wifiPassInput.text = ""
-                                                                wifiPassInput.forceActiveFocus()
+                                                                islandWin.clearWifiPassword()
+                                                                if (islandWin.selectedWifiIsEnterprise) {
+                                                                    wifiUserInput.forceActiveFocus()
+                                                                } else {
+                                                                    wifiPassInput.forceActiveFocus()
+                                                                }
                                                             }
                                                         }
                                                     }
