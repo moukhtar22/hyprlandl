@@ -35,7 +35,8 @@ export RHYTHM_DOTFILES_DIR="$REPO_DIR"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}"
 STATUS_FILE="${XDG_RUNTIME_DIR:-/tmp}/ota-status.json"
 BACKUP_BASE="$HOME/.config.backup"
-LOG_FILE="/tmp/system-ota.log"
+LOG_FILE="${XDG_RUNTIME_DIR:-/tmp}/system-ota.log"
+touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/system-ota-$USER.log"
 
 mkdir -p "$CACHE_DIR" "$BACKUP_BASE"
 
@@ -79,7 +80,7 @@ get_local_version() {
             return
         fi
     fi
-    echo "1.0.0"
+    echo "0.1.0"
 }
 
 ver_greater() {
@@ -545,42 +546,38 @@ cmd_update() {
     # kills its child processes on shutdown, so without detaching first the
     # update would kill itself at that stop and never bring the panel back.
     if [ "${OTA_DETACHED:-0}" != "1" ]; then
-        # Correr desde una COPIA en /tmp, nunca desde $HOME/.local/bin/system-ota.
-        #
-        # El paso de despliegue copia el repositorio entero sobre .local/bin, y
-        # este script vive ahi. Bash no lee el guion entero de una vez: relee por
-        # offset a medida que avanza, asi que al sobrescribirse en mitad de la
-        # ejecucion se queda leyendo basura y se muere sin decir nada. Medido con
-        # un guion minimo: imprime el paso 1, se sobrescribe, no imprime nada mas
-        # y sale con codigo 0.
-        #
-        # Asi fue como un update real se quedo en "Deploying configs and scripts...",
-        # sin migraciones, sin pacman, sin recargar servicios y sin reiniciar la
-        # isla: la dejo apagada y no llego a mandar la notificacion final.
-        local runner
-        runner=$(mktemp /tmp/system-ota-run.XXXXXX)
-        if ! cp -f "$0" "$runner" 2>/dev/null; then
-            runner="$0"
-        else
-            chmod +x "$runner" 2>/dev/null || true
+        local should_detach=true
+        if [ -t 1 ]; then
+            should_detach=false
         fi
-        # Escapar del cgroup del servicio, no solo de la sesion.
-        #
-        # setsid saca al proceso de la sesion, pero NO del cgroup: sigue en
-        # app.slice/waybar-island.service. Como la unidad no tiene KillMode, systemd
-        # usa control-group y al parar la isla mata TODO lo que haya dentro,
-        # incluido el runner ya desvinculado. Medido: un update lanzado desde la
-        # isla moria justo al parar la isla ("Deploying configs and scripts..." era
-        # lo ultimo del log), mientras el mismo codigo lanzado desde un terminal
-        # llegaba al final. systemd-run --scope lo pone en un scope propio, fuera
-        # del alcance del stop.
-        if command -v systemd-run >/dev/null 2>&1; then
-            OTA_DETACHED=1 OTA_RUNNER="$runner" systemd-run --user --scope --quiet bash "$runner" update "$@" >>"$LOG_FILE" 2>&1 </dev/null
-        else
-            OTA_DETACHED=1 OTA_RUNNER="$runner" setsid --fork bash "$runner" update "$@" >>"$LOG_FILE" 2>&1 </dev/null
+        for arg in "$@"; do
+            case "$arg" in
+                --detach) should_detach=true ;;
+                --no-detach|--foreground) should_detach=false ;;
+            esac
+        done
+
+        if [ "$should_detach" = "true" ]; then
+            local runner
+            runner=$(mktemp /tmp/system-ota-run.XXXXXX)
+            if ! cp -f "$0" "$runner" 2>/dev/null; then
+                runner="$0"
+            else
+                chmod +x "$runner" 2>/dev/null || true
+            fi
+            local launched=false
+            if command -v systemd-run >/dev/null 2>&1; then
+                if OTA_DETACHED=1 OTA_RUNNER="$runner" systemd-run --user --scope --quiet bash "$runner" update "$@" >>"$LOG_FILE" 2>&1 </dev/null; then
+                    launched=true
+                fi
+            fi
+            if [ "$launched" != "true" ]; then
+                OTA_DETACHED=1 OTA_RUNNER="$runner" setsid --fork bash "$runner" update "$@" >>"$LOG_FILE" 2>&1 </dev/null || true
+            fi
+            echo "OTA update started in the background (detached)."
+            return 0
         fi
-        echo "OTA update started in the background (detached)."
-        return 0
+        export OTA_DETACHED=1
     fi
 
     # Red de seguridad: si este guion muere por lo que sea, aunque sea por un error
@@ -690,22 +687,39 @@ cmd_update() {
     echo "[2/4] Updating dotfiles from repository..."
     if [ -d "$REPO_DIR/.git" ]; then
         local stash_needed=false
-        if ! git -C "$REPO_DIR" diff --quiet 2>/dev/null || ! git -C "$REPO_DIR" diff --cached --quiet 2>/dev/null; then
+        if ! git -C "$REPO_DIR" diff --quiet 2>/dev/null || ! git -C "$REPO_DIR" diff --cached --quiet 2>/dev/null || [ -n "$(git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ]; then
             echo "Stashing local changes..."
             git -C "$REPO_DIR" stash push -u -m "ota-pre-update-$(date +%s)" >/dev/null 2>&1 || true
             stash_needed=true
         fi
 
+        # Make sure local branch is on main and not stuck in rebase
+        git -C "$REPO_DIR" rebase --abort >/dev/null 2>&1 || true
+        local cur_branch
+        cur_branch=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+        if [ "$cur_branch" = "HEAD" ]; then
+            git -C "$REPO_DIR" checkout main >/dev/null 2>&1 || true
+        fi
+
+        # If shallow, unshallow to avoid rebase failures
+        if [ -f "$REPO_DIR/.git/shallow" ]; then
+            git -C "$REPO_DIR" fetch --unshallow origin main >/dev/null 2>&1 || true
+        fi
+
         # Fetch and pull if behind
-        git -C "$REPO_DIR" fetch origin main >/dev/null 2>&1 || true
+        git -C "$REPO_DIR" fetch origin main --tags >/dev/null 2>&1 || git -C "$REPO_DIR" fetch origin --tags >/dev/null 2>&1 || true
         local behind
         behind=$(git -C "$REPO_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then
             echo "Pulling $behind new commit(s) from remote..."
             if ! git -C "$REPO_DIR" pull --rebase origin main >> "$LOG_FILE" 2>&1; then
-                OTA_PROBLEMS=$((OTA_PROBLEMS + 1))
-                echo "  [!] El pull fallo o tuvo conflictos. Se deja el estado local como estaba."
-                echo "      Detalle en $LOG_FILE"
+                git -C "$REPO_DIR" rebase --abort >/dev/null 2>&1 || true
+                echo "  [!] Rebase failed, attempting fast-forward merge..."
+                if ! git -C "$REPO_DIR" merge --ff-only origin/main >> "$LOG_FILE" 2>&1; then
+                    OTA_PROBLEMS=$((OTA_PROBLEMS + 1))
+                    echo "  [!] El pull fallo o tuvo conflictos. Se deja el estado local como estaba."
+                    echo "      Detalle en $LOG_FILE"
+                fi
             fi
         fi
 
@@ -1121,7 +1135,7 @@ cmd_gui() {
                 ;;
             "2."*)
                 if gum confirm "Start OTA update now?"; then
-                    gum spin --spinner line --title "Applying update..." -- bash -c "$HOME/.local/bin/system-ota update"
+                    gum spin --spinner line --title "Applying update..." -- bash -c "$HOME/.local/bin/system-ota update --foreground"
                     gum confirm "Update completed. Press enter to continue" || true
                 fi
                 ;;

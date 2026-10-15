@@ -8879,7 +8879,15 @@ Flickable {
                                 MouseArea {
                                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                     enabled: !root.otaUpdating
-                                    onClicked: { root.otaUpdating = true; otaUpdateProc.running = true }
+                                    onClicked: {
+                                        if (root.otaData.dotfiles_behind === 0 && (!root.otaData.latest_version || root.otaData.latest_version === root.otaData.current_version) && root.otaData.pacman_updates > 0) {
+                                            islandWin.expanded = false;
+                                            root.runCmd("kitty -e system-ota update --system");
+                                        } else {
+                                            root.otaUpdating = true;
+                                            otaUpdateProc.running = true;
+                                        }
+                                    }
                                 }
                             }
                         }
