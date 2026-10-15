@@ -5999,10 +5999,17 @@ step_update() {
         fi
     fi
 
+    # Auto-heal permissions if any git objects or metadata became root-owned
+    if [ -d "$DOTFILES_DIR/.git" ] && command -v sudo >/dev/null 2>&1; then
+        if [ -n "$(find "$DOTFILES_DIR/.git" -user root -print -quit 2>/dev/null)" ]; then
+            sudo chown -R "$USER:$(id -gn)" "$DOTFILES_DIR" 2>/dev/null || true
+        fi
+    fi
+
     # Fetch and pull remote changes if working from a git repository
     if [ -d "$DOTFILES_DIR/.git" ]; then
         step_item "Checking for remote repository updates..."
-        git -C "$DOTFILES_DIR" fetch origin main >> "$LOG_FILE" 2>&1 || true
+        git -C "$DOTFILES_DIR" fetch origin +refs/heads/main:refs/remotes/origin/main --tags >> "$LOG_FILE" 2>&1 || git -C "$DOTFILES_DIR" fetch origin --tags >> "$LOG_FILE" 2>&1 || true
         local behind
         behind=$(git -C "$DOTFILES_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then

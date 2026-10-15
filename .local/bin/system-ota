@@ -706,8 +706,15 @@ cmd_update() {
             git -C "$REPO_DIR" fetch --unshallow origin main >/dev/null 2>&1 || true
         fi
 
+        # Auto-heal permissions if any git objects or metadata became root-owned
+        if command -v sudo >/dev/null 2>&1; then
+            if [ -n "$(find "$REPO_DIR/.git" -user root -print -quit 2>/dev/null)" ]; then
+                sudo chown -R "$USER:$(id -gn)" "$REPO_DIR" 2>/dev/null || true
+            fi
+        fi
+
         # Fetch and pull if behind
-        git -C "$REPO_DIR" fetch origin main --tags >/dev/null 2>&1 || git -C "$REPO_DIR" fetch origin --tags >/dev/null 2>&1 || true
+        git -C "$REPO_DIR" fetch origin +refs/heads/main:refs/remotes/origin/main --tags >/dev/null 2>&1 || git -C "$REPO_DIR" fetch origin --tags >/dev/null 2>&1 || true
         local behind
         behind=$(git -C "$REPO_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then
