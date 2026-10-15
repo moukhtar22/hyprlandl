@@ -714,11 +714,17 @@ cmd_update() {
             echo "Pulling $behind new commit(s) from remote..."
             if ! git -C "$REPO_DIR" pull --rebase origin main >> "$LOG_FILE" 2>&1; then
                 git -C "$REPO_DIR" rebase --abort >/dev/null 2>&1 || true
-                echo "  [!] Rebase failed, attempting fast-forward merge..."
+                echo "  [!] Rebase falló por conflictos o divergencia. Probando fast-forward..."
                 if ! git -C "$REPO_DIR" merge --ff-only origin/main >> "$LOG_FILE" 2>&1; then
-                    OTA_PROBLEMS=$((OTA_PROBLEMS + 1))
-                    echo "  [!] El pull fallo o tuvo conflictos. Se deja el estado local como estaba."
-                    echo "      Detalle en $LOG_FILE"
+                    local rescue_branch="backup-local-$(date +%Y%m%d-%H%M%S)"
+                    git -C "$REPO_DIR" branch "$rescue_branch" >/dev/null 2>&1 || true
+                    echo "  [!] Historial local divergente. Guardando rama de rescate '$rescue_branch' y sincronizando con origin/main..."
+                    if git -C "$REPO_DIR" reset --hard origin/main >> "$LOG_FILE" 2>&1; then
+                        echo "  [✓] Repositorio sincronizado exitosamente con la última versión de origin/main."
+                    else
+                        OTA_PROBLEMS=$((OTA_PROBLEMS + 1))
+                        echo "  [!] No se pudo resetear a origin/main. Detalle en $LOG_FILE"
+                    fi
                 fi
             fi
         fi

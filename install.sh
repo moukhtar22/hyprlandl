@@ -30,7 +30,16 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 
-DOTFILES_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")
+DOTFILES_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || echo "")
+if [ -z "$DOTFILES_DIR" ] || [ ! -d "$DOTFILES_DIR/.git" ]; then
+    if [ -d "$HOME/hyprland/.git" ]; then
+        DOTFILES_DIR="$HOME/hyprland"
+    elif [ -n "${RHYTHM_DOTFILES_DIR:-}" ] && [ -d "${RHYTHM_DOTFILES_DIR}/.git" ]; then
+        DOTFILES_DIR="$RHYTHM_DOTFILES_DIR"
+    elif [ -d "$HOME/dotfiles/.git" ]; then
+        DOTFILES_DIR="$HOME/dotfiles"
+    fi
+fi
 
 # El log va a un mktemp y no a "/tmp/hyprland-install-$USER.log", que se puede
 # adivinar de sobra. En esa ruta fija, otro usuario del equipo crea el fichero
@@ -5998,10 +6007,32 @@ step_update() {
         behind=$(git -C "$DOTFILES_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then
             step_item "Pulling $behind new commit(s)..."
+            local _stash_done=false
+            if ! git -C "$DOTFILES_DIR" diff --quiet 2>/dev/null || [ -n "$(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null)" ]; then
+                git -C "$DOTFILES_DIR" stash push -u -m "install-pre-update-$(date +%s)" >/dev/null 2>&1 || true
+                _stash_done=true
+            fi
+            if [ -f "$DOTFILES_DIR/.git/shallow" ]; then
+                git -C "$DOTFILES_DIR" fetch --unshallow origin main >/dev/null 2>&1 || true
+            fi
             if git -C "$DOTFILES_DIR" pull --rebase origin main >> "$LOG_FILE" 2>&1; then
                 step_ok "Repository updated to latest version."
             else
-                step_warn "Git pull had conflicts; continuing with local files."
+                git -C "$DOTFILES_DIR" rebase --abort >/dev/null 2>&1 || true
+                if git -C "$DOTFILES_DIR" merge --ff-only origin/main >> "$LOG_FILE" 2>&1; then
+                    step_ok "Repository updated via fast-forward."
+                else
+                    local _rescue="backup-local-$(date +%Y%m%d-%H%M%S)"
+                    git -C "$DOTFILES_DIR" branch "$_rescue" >/dev/null 2>&1 || true
+                    if git -C "$DOTFILES_DIR" reset --hard origin/main >> "$LOG_FILE" 2>&1; then
+                        step_ok "Repository synced to origin/main (local commits saved in $_rescue)."
+                    else
+                        step_warn "Could not cleanly update repository; continuing with local files."
+                    fi
+                fi
+            fi
+            if [ "$_stash_done" = true ]; then
+                git -C "$DOTFILES_DIR" stash pop >/dev/null 2>&1 || true
             fi
         else
             step_ok "Repository is already at the latest version."
@@ -6027,7 +6058,7 @@ step_update() {
                     do_pkg_update=true
                 fi
             else
-                read -r -p "Would you also like to update system packages with $pkg_label? [y/N] " _reply
+                read -r -p "Would you also like to update system packages with $pkg_label? [y/N] " _reply < /dev/tty 2>/dev/null || true
                 [[ "$_reply" =~ ^[Yy] ]] && do_pkg_update=true
             fi
             if [ "$do_pkg_update" = true ]; then
