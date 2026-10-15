@@ -66,6 +66,11 @@ generados_por_herramientas() {
         .config/gtk-4.0/settings.ini)          return 0 ;;
         .config/mako/config)                   return 0 ;;
         .cache/wal/*)                          return 0 ;;
+        .local/bin/system-ota)                 return 0 ;;
+        .local/bin/ota-*)                      return 0 ;;
+        .local/bin/rhythm-materialize)         return 0 ;;
+        .local/bin/rhythm-doctor)              return 0 ;;
+        .local/bin/rhythm-migrate)             return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -182,14 +187,15 @@ desplegar_bin() {
         rel=".local/bin/$rel_path"
         target="$HOME/$rel"
 
-        if [ -f "$target" ]; then
-            if cmp -s "$f" "$target"; then
+        if [ -f "$target" ] || [ -L "$target" ]; then
+            if [ ! -L "$target" ] && cmp -s "$f" "$target"; then
                 SKIPPED=$((SKIPPED+1))
                 continue
             fi
             rescatar_edicion "$target" "$f" "$rel"
         fi
         mkdir -p "$(dirname "$target")" 2>/dev/null
+        rm -f "$target" 2>/dev/null || true
         run cp -f "$f" "$target"
         run chmod 755 "$target"
         registrar "$rel" "$target"

@@ -4986,7 +4986,9 @@ MONCONF
         chmod +x "$target"
     done
     chmod +x "$HOME/.local/bin"/* 2>/dev/null || true
-    [ -f "$HOME/.local/bin/system-ota" ] && ln -sf "$HOME/.local/bin/system-ota" "$HOME/.local/bin/ota-updater" 2>/dev/null || true
+    if [ ! -f "$DOTFILES_DIR/.local/bin/ota-updater" ] && [ -f "$HOME/.local/bin/system-ota" ]; then
+        ln -sf "$HOME/.local/bin/system-ota" "$HOME/.local/bin/ota-updater" 2>/dev/null || true
+    fi
 
     # Persist repository checkout for rhythm-doctor and system-ota updates
     if [ ! -d "$HOME/hyprland/.git" ] && [ -d "$DOTFILES_DIR/.git" ]; then

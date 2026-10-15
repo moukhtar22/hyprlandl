@@ -771,13 +771,20 @@ cmd_update() {
         cp -f "$REPO_DIR/.version" "$HOME/.version" 2>/dev/null || true
     fi
 
-    # Bootstrap latest rhythm-materialize and ota wrappers before deployment
+    # Bootstrap latest rhythm-materialize, system-ota and ota wrappers before deployment
+    mkdir -p "$HOME/.local/bin"
     if [ -f "$REPO_DIR/.local/bin/rhythm-materialize" ]; then
-        mkdir -p "$HOME/.local/bin"
+        rm -f "$HOME/.local/bin/rhythm-materialize" 2>/dev/null || true
         cp -f "$REPO_DIR/.local/bin/rhythm-materialize" "$HOME/.local/bin/rhythm-materialize" 2>/dev/null || true
         chmod 755 "$HOME/.local/bin/rhythm-materialize" 2>/dev/null || true
     fi
+    if [ -f "$REPO_DIR/.local/bin/system-ota" ]; then
+        rm -f "$HOME/.local/bin/system-ota" 2>/dev/null || true
+        cp -f "$REPO_DIR/.local/bin/system-ota" "$HOME/.local/bin/system-ota" 2>/dev/null || true
+        chmod 755 "$HOME/.local/bin/system-ota" 2>/dev/null || true
+    fi
     if [ -f "$REPO_DIR/.local/bin/ota-updater" ]; then
+        rm -f "$HOME/.local/bin/ota-updater" 2>/dev/null || true
         cp -f "$REPO_DIR/.local/bin/ota-updater" "$HOME/.local/bin/ota-updater" 2>/dev/null || true
         chmod 755 "$HOME/.local/bin/ota-updater" 2>/dev/null || true
     fi
